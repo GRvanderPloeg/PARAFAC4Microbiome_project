@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -e
+# refresh the QIIME2 cache
+qiime dev refresh-cache
