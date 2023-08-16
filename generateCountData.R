@@ -73,19 +73,18 @@ simulateCountData = function(subjectLoadings, featureLoadings, timeLoadings, num
 }
 
 # Rows: subject, features; columns: components
-subjectLoadings = rbind(c(1.0, 0.01, 0.01),
-                        c(0.01, 1.0, 0.01)) 
+subjectLoadings = rbind(c(1.0, 0.01),
+                        c(0.01, 1.0)) 
 
-featureLoadings = rbind(c(1.0, 0.01, 0.01),
-                        c(0.01, 1.0, 0.01))
+featureLoadings = rbind(c(1.0, 0.01),
+                        c(0.01, 1.0))
 
-timeLoadings = rbind(c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9),
-                     c(1.0, 1.0, 1.0, 1.0, 0.5, 0.1, 0.1, 0.1, 0.1),
-                     c(1.0, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0))
+timeLoadings = rbind(c(1.0, 1.0, 1.0, 1.0, 0.5, 0.1, 0.1, 0.1, 0.1),
+                     c(0.1, 0.1, 0.1, 0.1, 0.5, 1.0, 1.0, 1.0, 1.0))
 
-numSubjectsPerGroup = c(5, 5)
-numFeaturesPerGroup = c(20, 20)
-relativeNoise = 0.5
+numSubjectsPerGroup = c(10, 10)
+numFeaturesPerGroup = c(200, 200)
+relativeNoise = 0.01
 avgLibSize = 25000
 stdLibSize = 5000
 

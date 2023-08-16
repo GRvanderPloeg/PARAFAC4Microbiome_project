@@ -4,7 +4,6 @@ addpath(".\Matlab scripts\N-way toolbox\"); % from Rasmus Bro
 
 % Load data
 df_raw = readmatrix("simData.csv", Delimiter=",");
-df = df_raw(:,1:J);
 
 subjectMeta = readmatrix("subjectMetadata.csv", Delimiter=",", OutputType="string");
 featureMeta = readmatrix("featureMetadata.csv", Delimiter=",", OutputType="string");
@@ -16,6 +15,8 @@ I = max(str2double(subjectMeta(:,1)));
 J = max(str2double(featureMeta(:,1)));
 K = size(timeLoadings,2);
 numComponents = size(timeLoadings,1);
+df = df_raw(:,1:J);
+
 
 % processing
 df_clr = transformCLR(df);
