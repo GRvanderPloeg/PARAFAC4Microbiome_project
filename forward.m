@@ -1,14 +1,7 @@
-% backwards
-% Start from the very end, a finished PARAFAC model
+% Forward
 addpath(".\Matlab scripts\Scripts\"); % own scripts
 addpath(".\Matlab scripts\N-way toolbox\"); % from Rasmus Bro
-%%
-% Load loadings
-A = readmatrix("./TIFN/Tongue_individual_mode.csv", Filetype="delimitedtext", OutputType="string");
-B = readmatrix("./TIFN/Tongue_feature_mode.csv", Filetype="delimitedtext", OutputType="string");
-C = readmatrix("./TIFN/Tongue_time_mode.csv", Filetype="delimitedtext", OutputType="string");
-M = readmatrix("./TIFN/Tongue_model.csv", Filetype="delimitedtext");
-Mcube = reshape(M, 41, 78, 7);
+
 %%
 % Load raw microbiome data
 microbiome_raw = readmatrix("./TIFN/count-table.tsv", Filetype="delimitedtext", Delimiter="\t", OutputType="string");
@@ -60,52 +53,72 @@ microb_tongue = rawDataToCube_keepIndividuals(microb_tongue_reduced, microb_tong
 microb_tongue_id_meta = rf_data_control(:,1);
 microb_tongue_ASV_meta = taxonomy_tongue_reduced(:, [2:end 1]);
 
-RESIDUALS = microb_tongue_cnt_scl - Mcube;
-
 %%
-% Initialize vectors
-fakeA = str2double(A(:,1:2)); %normrnd(0, 11, [41 2]);
-fakeB = str2double(B(:,1:2)); %normrnd(0.075, 0.075, [78 2]);
-fakeC = str2double(C);
+% Load fake data and process it
+fakeMfinal = readmatrix("./simCountData.csv", FileType="delimitedtext");
 
-fakeM = fakeA * krb(fakeC, fakeB)';
-fakeMcube = reshape(fakeM, [41 78 7]);
-fakeMcube = fakeMcube + RESIDUALS;
-
-%%
-% Reverse scaling
-fakeStds = microb_tongue_stds; %normrnd(1.9, 0.57, [78, 1]);
-fakeMcube_revScl = fakeMcube;
-
-for j=1:78
-    for k=1:7
-        fakeMcube_revScl(:,j,k) = fakeMcube_revScl(:,j,k) * fakeStds(j);
-    end
-end
-
-%%
-% Reverse centering
-fakeMeans = microb_tongue_means; %normrnd(4, 1.72, [78, 7]);
-fakeMcube_revScl_revCnt = fakeMcube_revScl;
-
-for k=1:7
-    for j=1:78
-        fakeMcube_revScl_revCnt(:,j,k) = fakeMcube_revScl_revCnt(:,j,k) + fakeMeans(j,k);
-    end
-end
-
-%%
-% Reverse CLR
-fakeGeoMeans = tongueGeoMeans; %normrnd(1.0328, 0.0082, 287);
-dummy = permute(fakeMcube_revScl_revCnt, [1 3 2]);
-fakeMfinal = reshape(dummy, 41*7, 78);
-
+% Replaced CLR as the procedure would not match the original one exactly
+fakeMforward_clr = fakeMfinal+1;
 for i=1:287
-    fakeMfinal(i,:) = exp(fakeMfinal(i,:)) * fakeGeoMeans(i);
+    fakeMforward_clr(i,:) = log(fakeMforward_clr(i,:) / tongueGeoMeans(i));
 end
 
-fakeMfinal = round(fakeMfinal) - 1; % make into integers and remove pseudocount
+% Replace cube creation as the rows don't need to be reordered
+fakeMforward_cube = reshape(fakeMforward_clr, 41, 7, 78);
+fakeMforward_cube = permute(fakeMforward_cube, [1 3 2]);
+
+% Rest is intact
+[fakeMforward_cnt, fakeMforward_means] = centerData(fakeMforward_cube, 1);
+[fakeMforward_cnt_scl, fakeMforward_stds] = scaleData(fakeMforward_cnt, 2);
+
 
 %%
-% Save
-writematrix(fakeMfinal, "./simCountData.csv");
+% Initialize options
+Options = [];
+Options(1) = 1e-6;  % convergence (default 1e-6)
+Options(2) = 2;     % initialization (default 1)
+Options(3) = 0;     % resulting plot (default 0)
+
+%%
+% Do a reporter Parafac + plot it to check what the best model is.
+path_start = "./20230818_fake_TIFN_tongue/Figures/";
+maxComponents=3;
+days = [-14 0 2 5 9 14 21];
+numReps=25;
+maxIterations=20;
+
+[tongueModels, tongueCons, tongueVarExps, tongueBoots, tongueBootVarExps, tongueTuckers] = quickReport(fakeMforward_cnt_scl, maxComponents, numReps, maxIterations, rf_data_control, microb_tongue_ASV_meta, days, 2, "Tongue bootstrapped", path_start+"tongue");
+
+%%
+% Dump data so far for later inspection
+path_start = "./20230818_fake_TIFN_tongue/Dump/";
+dump(tongueModels, tongueCons, tongueVarExps, tongueBoots, tongueBootVarExps, tongueTuckers, path_start, "tongue");
+
+%%
+% Pick the number of components that seems appropriate based on the plots
+% and pick the model that you like the best.
+% Best practices: pick between best Corcondia or best variance explained.
+% Alternative: choose a good tucker congruence model.
+
+numFactors_tongue = 2;
+
+tongue_choice = find(tongueVarExps{numFactors_tongue}==max(tongueVarExps{numFactors_tongue}));
+%tongue_choice = find(tongueCons{numFactors_tongue}==max(tongueCons{numFactors_tongue}));
+
+Tongue_model = pickModel(tongueModels{1,numFactors_tongue}, tongueModels{2,numFactors_tongue}, tongueModels{3,numFactors_tongue}, tongue_choice);
+
+%%
+% Save the models
+model_path = "./20230818_fake_TIFN_tongue/PARAFAC models/";
+
+savePARAFAC(fakeMforward_cnt_scl, Tongue_model, microb_tongue_id_meta, microb_tongue_ASV_meta, model_path +  "Tongue");
+
+
+%%
+% Plot PARAFAC models
+days = [-14 0 2 5 9 14 21];
+timepoints = 1:7;
+path_start = "./20230818_fake_TIFN_tongue/Figures/";
+
+plotPARAFAC4(fakeMforward_cnt_scl, Tongue_model, tongueVarExps{numFactors_tongue}, tongue_choice, rf_data_control, microb_tongue_ASV_meta, days, timepoints, 2, "PARAFAC tongue", path_start + "PARAFAC_tongue.jpg");
+
