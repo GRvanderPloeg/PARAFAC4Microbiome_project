@@ -1,4 +1,4 @@
-function Xclr=transformCLR(X)
+function [Xclr, gMeans]=transformCLR(X)
 % Centered-log ratio transformation of compositional data
 % Zero-handling implemented as suggested in Quinn et al 2019: 10.1093/gigascience/giz107
 % Currently limited to two-way datasets
@@ -18,9 +18,11 @@ X = X + pseudocount;
 
 Xlong = X;
 Xclr = Xlong;
+gMeans = zeros(I, 1);
 
 for i=1:I
     dataVector = Xlong(i,:);
+    gMeans(i) = geomean(dataVector);
     Xclr(i,:) = log(dataVector/geomean(dataVector));
 end
 
