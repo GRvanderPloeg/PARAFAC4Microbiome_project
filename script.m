@@ -59,7 +59,7 @@ subplot(2,2,4); bar(featureLoadings); title("Real feature mode");
 % Diagnostic plots for PARAFAC
 subplot(2,3,1); bar(pfac2{1}); title("PARAFAC subject mode");
 subplot(2,3,2); bar(pfac2{2}); title("PARAFAC feature mode");
-subplot(2,3,3); plot(1:9, pfac2{3}(:,1)); hold on; plot(1:9, pfac2{3}(:,2)); title("PARAFAC time modes");
+subplot(2,3,3); plot(1:7, pfac{3}(:,1)); hold on; plot(1:7, pfac{3}(:,2)); title("PARAFAC time modes");
 subplot(2,3,4); bar(subjectLoadings); title("Real subject mode");
 subplot(2,3,5); bar(featureLoadings); title("Real feature mode");
 subplot(2,3,6); plot(1:9, timeLoadings(:,1)); hold on; plot(1:9, timeLoadings(:,2)); title("Real time modes");

@@ -54,23 +54,36 @@ microb_tongue_id_meta = rf_data_control(:,1);
 microb_tongue_ASV_meta = taxonomy_tongue_reduced(:, [2:end 1]);
 
 %%
+% Determine array sizes
+I = 41;
+J = 78;
+K = 9;
+numComponents = 2;
+
+%%
 % Load fake data and process it
-fakeMfinal = readmatrix("./simCountData.csv", FileType="delimitedtext");
+fakeMfinal = readmatrix("./temp.csv", FileType="delimitedtext");
 
 % Replaced CLR as the procedure would not match the original one exactly
-fakeMforward_clr = fakeMfinal+1;
-for i=1:287
-    fakeMforward_clr(i,:) = log(fakeMforward_clr(i,:) / tongueGeoMeans(i));
-end
+% Old way, using known geoMeans from the real data
+
+% fakeMforward_clr = fakeMfinal+1;
+% for i=1:287
+%     fakeMforward_clr(i,:) = log(fakeMforward_clr(i,:) / tongueGeoMeans(i));
+% end
+
+% Proper way
+[fakeMforward_clr, ~] = transformCLR(fakeMfinal);
 
 % Replace cube creation as the rows don't need to be reordered
-fakeMforward_cube = reshape(fakeMforward_clr, 41, 7, 78);
+fakeMforward_cube = reshape(fakeMforward_clr, I, K, J);
 fakeMforward_cube = permute(fakeMforward_cube, [1 3 2]);
 
 % Rest is intact
 [fakeMforward_cnt, fakeMforward_means] = centerData(fakeMforward_cube, 1);
 [fakeMforward_cnt_scl, fakeMforward_stds] = scaleData(fakeMforward_cnt, 2);
 
+%temp = microb_tongue_numeric(:, (tongue_ASV_selection & nonbacterial));
 
 %%
 % Initialize options
@@ -81,9 +94,10 @@ Options(3) = 0;     % resulting plot (default 0)
 
 %%
 % Do a reporter Parafac + plot it to check what the best model is.
-path_start = "./20230818_fake_TIFN_tongue/Figures/";
+path_start = "./test_run/Figures/";
 maxComponents=3;
-days = [-14 0 2 5 9 14 21];
+%days = [-14 0 2 5 9 14 21];
+days = 1:K;
 numReps=25;
 maxIterations=20;
 
@@ -91,7 +105,7 @@ maxIterations=20;
 
 %%
 % Dump data so far for later inspection
-path_start = "./20230818_fake_TIFN_tongue/Dump/";
+path_start = "./test_run/Dump/";
 dump(tongueModels, tongueCons, tongueVarExps, tongueBoots, tongueBootVarExps, tongueTuckers, path_start, "tongue");
 
 %%
@@ -100,7 +114,7 @@ dump(tongueModels, tongueCons, tongueVarExps, tongueBoots, tongueBootVarExps, to
 % Best practices: pick between best Corcondia or best variance explained.
 % Alternative: choose a good tucker congruence model.
 
-numFactors_tongue = 2;
+numFactors_tongue = numComponents;
 
 tongue_choice = find(tongueVarExps{numFactors_tongue}==max(tongueVarExps{numFactors_tongue}));
 %tongue_choice = find(tongueCons{numFactors_tongue}==max(tongueCons{numFactors_tongue}));
@@ -109,16 +123,16 @@ Tongue_model = pickModel(tongueModels{1,numFactors_tongue}, tongueModels{2,numFa
 
 %%
 % Save the models
-model_path = "./20230818_fake_TIFN_tongue/PARAFAC models/";
+model_path = "./test_run/PARAFAC models/";
 
 savePARAFAC(fakeMforward_cnt_scl, Tongue_model, microb_tongue_id_meta, microb_tongue_ASV_meta, model_path +  "Tongue");
 
-
 %%
 % Plot PARAFAC models
-days = [-14 0 2 5 9 14 21];
-timepoints = 1:7;
-path_start = "./20230818_fake_TIFN_tongue/Figures/";
+%days = [-14 0 2 5 9 14 21];
+days = 1:K;
+timepoints = 1:K;
+path_start = "./test_run/Figures/";
 
 plotPARAFAC4(fakeMforward_cnt_scl, Tongue_model, tongueVarExps{numFactors_tongue}, tongue_choice, rf_data_control, microb_tongue_ASV_meta, days, timepoints, 2, "PARAFAC tongue", path_start + "PARAFAC_tongue.jpg");
 
