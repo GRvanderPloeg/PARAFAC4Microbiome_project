@@ -1,0 +1,95 @@
+---
+title: "classicalMicrobiomeAnalysis"
+output: html_document
+date: "2023-08-22"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(factoextra)
+library(vegan)
+library(ape)
+```
+
+```{r load data}
+df = read.csv("tempData.csv", header=FALSE) %>% as_tibble()
+subjectMeta = read.csv("subjectMetadata.csv", header=FALSE) %>% as_tibble()
+colnames(subjectMeta) = c("subject", "RFgroup")
+featureMeta = read.csv("featureMetadata.csv", header=FALSE) %>% as_tibble()
+colnames(featureMeta) = c("feature", "FeatureGroup")
+
+subjectLoadings = read.csv("subjectLoadings.csv", header=FALSE) %>% as_tibble()
+featureLoadings = read.csv("featureLoadings.csv", header=FALSE) %>% as_tibble()
+timeLoadings = read.csv("timeLoadings.csv", header=FALSE) %>% as_tibble()
+```
+
+```{r the truth}
+subjectLoadings %>% mutate(RFgroup = subjectMeta$RFgroup) %>% ggplot(aes(x=V1,y=V2,col=as.factor(RFgroup))) + geom_point()
+featureLoadings %>% mutate(FeatureGroup = featureMeta$FeatureGroup) %>% ggplot(aes(x=V1,y=V2,col=as.factor(FeatureGroup))) + geom_point()
+timeLoadings %>% ggplot(aes(x=1:nrow(.),y=V1)) + geom_line()
+timeLoadings %>% ggplot(aes(x=1:nrow(.),y=V2)) + geom_line()
+```
+
+```{r classical PCA}
+PCAmodel = prcomp(df, rank=2, scale=TRUE, center=TRUE)
+fviz_eig(PCAmodel)
+fviz_pca_ind(PCAmodel,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+fviz_pca_var(PCAmodel,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+```
+
+```{r PCoA - bray-curtis}
+d = vegdist(df, method="bray")
+BC_pcoa = pcoa(d)
+
+plottableData = BC_pcoa$vectors %>% as_tibble() %>% mutate(timepoint = rep(1:nrow(timeLoadings), each=nrow(subjectMeta)), subject = rep(1:nrow(subjectLoadings), each=nrow(timeLoadings))) %>% left_join(subjectMeta)
+
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(subject))) + geom_point()
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point()
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(RFgroup))) + geom_point()
+```
+
+```{r PCoA - aitchison}
+pseudocount = 1
+d = vegdist(df+pseudocount, method="aitchison")
+A_pcoa = pcoa(d)
+
+plottableData = A_pcoa$vectors %>% as_tibble() %>% mutate(timepoint = rep(1:nrow(timeLoadings), each=nrow(subjectMeta)), subject = rep(1:nrow(subjectLoadings), each=nrow(timeLoadings))) %>% left_join(subjectMeta)
+
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(subject))) + geom_point()
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point()
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(RFgroup))) + geom_point()
+```
+
+```{r PCoA - Jensen-shannon}
+d = philentropy::JSD(as.matrix(df))
+JS_pcoa = pcoa(d)
+
+plottableData = JS_pcoa$vectors %>% as_tibble() %>% mutate(timepoint = rep(1:nrow(timeLoadings), each=nrow(subjectMeta)), subject = rep(1:nrow(subjectLoadings), each=nrow(timeLoadings))) %>% left_join(subjectMeta)
+
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(subject))) + geom_point()
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point()
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(RFgroup))) + geom_point()
+``` 
+
+```{r testing differential abundance}
+df2 = df %>% mutate(timepoint = rep(1:nrow(timeLoadings), each=nrow(subjectMeta)), subject = rep(1:nrow(subjectLoadings), each=nrow(timeLoadings))) %>% filter(timepoint == 1 | timepoint == 4)
+
+condition = as.factor(df2$timepoint)
+dds <- DESeqDataSetFromMatrix(countData = t(df2 %>% select(-timepoint,-subject)+1),
+                              colData = DataFrame(condition),
+                              design = ~ condition)
+dds <- DESeq(dds)
+result = results(dds)
+
+result %>% as_tibble() %>% mutate(p = -log10(padj)) %>% ggplot(aes(x=log2FoldChange,y=p)) + geom_point() + ylab("-1*log10(padj)")
+```

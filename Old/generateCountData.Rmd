@@ -1,88 +1,33 @@
 ---
-title: "generateCountData"
-author: "RvdP"
-date: "2023-08-15"
-output: html_document
+title: "R Notebook"
+output: html_notebook
 ---
 
 ```{r requirements}
-library(tidyverse)
-library(patchwork)
-library(timeOmics)
-library(tscount)
+library(rTensor)
 ```
 
-```{r functions}
-simulate = function(mod, para, nIndiv, nTime, disper, nTaxa, nSc1, nSc2, nSc3, meta){
-  # Comments: (brace yourselves)
-  # model is useless, only contains one item
-  # para can be changed to be separate parameters for the function: intercept, past_obs, xreg
-  # tsglm.sim expects para as a list, but you can fix this differently
-  
-  TAXA = data.frame(matrix(ncol=nTaxa, nrow=nIndiv*nTime))
-  colnames(TAXA) = paste0("Taxa_", 1:nTaxa)
-  
-  for(i in 1:nTaxa){
-    if(i<=nSc1){#Time
-      k=1
-    }else if(i<=nSc1+nSc2){#Group
-      k=2
-    }else if(i<=nSc1+nSc2+nSc3){#Time+Group+Time*Group
-      k=3
-    }else {#No
-      k=4
-    }
-    
-    count = c()
-    for(j in 1:nIndiv){
-      t = c(tsglm.sim(n=nTime, param = para[[k]], model=model, 
-                     xreg=matrix(c(1:nTime,
-                                   rep(meta$Group[meta$Indiv==j][1],nTime),
-                                   1:nTime*rep(meta$Group[meta$Indiv==j][1],nTime)),ncol=3), 
-                     link="identity",
-                     distr="nbinom", distrcoefs=c(size=1/disper))$ts)
-      count<-c(count,t)
-    }
-    while(!any(count==0)){#At least one zero (Needed to run ZIGMM)
-      count<-c()
-      for(j in 1:nIndiv){
-        t<-c(tsglm.sim(n=nTime, param = para[[k]], model=model, 
-                       xreg=matrix(c(1:nTime,rep(meta$Group[meta$Indiv==j][1],nTime),
-                                     1:nTime*rep(meta$Group[meta$Indiv==j][1],nTime)),ncol=3),
-                       link="identity",
-                       distr="nbinom", distrcoefs=c(size=1/disper))$ts)
-        count<-c(count,t)
-      } 
-    }
-    TAXA[,i]<-count
-  }
-  
-  
-  return(TAXA)
-}
+```{r define vectors}
+A = matrix(rnorm(41*2, mean=0, sd=11), nrow=41, ncol=2)
+B = matrix(rnorm(78*2, mean=0.075, sd=0.075), nrow=78, ncol=2)
+C = cbind(c(0.3604, 0.3625, 0.3872, 0.4034, 0.3625, 0.3639, 0.4027),
+          c(0.3809, 0.4503, 0.3363, 0.3548, 0.3328, 0.3838, 0.3939))
+```
+
+```{r make data}
+M = A %*% t(khatri_rao(C, B))
 
 
 ```
 
-```{r run it}
-model = list(past_obs = 1)
-disp_1 = 0.1
-param_1 = list(list(intercept=runif(1,0,5), past_obs=0.04,  xreg=c(1.5,0,0)),
-                list(intercept=runif(1,0,5), past_obs=0.04,  xreg=c(0,13,0)),
-                list(intercept=runif(1,0,5), past_obs=0.04,  xreg=c(1.5,13,5)),
-                list(intercept=runif(1,0,5), past_obs=0.04,  xreg=c(0,0,0)))
+```{r reverse scaling}
 
-nIndiv = 20
-nTime = 10
-metaDF = data.frame(Time=rep(c(1:nTime),nIndiv),
-                   Indiv=rep(1:nIndiv,each=nTime),
-                   Group=rep(0:1,each=nIndiv*nTime/2))
+```
 
-n_iter = 10 # Number of iterations of the loop
-list_of_frames <- replicate(n_iter, data.frame())
+```{r reverse centering}
 
-for(i in 1:n_iter) {
-  df_Scenario1 = simulate(model,param_1,nIndiv,nTime, disp_1, 300, 10,10,10,metaDF)
-  list_of_frames[[i]] = df_Scenario1
-}
+```
+
+```{r reverse clring}
+
 ```

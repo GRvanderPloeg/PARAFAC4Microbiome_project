@@ -34,9 +34,7 @@ FeatureColors =    [122 62 118; % rgb(122, 62, 118)
                     191 191 191;
                     0 0 0]/255;
 
-RFcolors = [0.7529 0.7529 0.7529;
-            0 0 1;
-            1 0 0];
+RFcolors = FeatureColors;
 
 numFactors = size(As,2);
 
@@ -94,10 +92,10 @@ for i=0:(numFactors-1)
     maxY = max(individual_mode(:,1) + individual_mode(:,2));
     temp2 = bar(individual_mode(:,1),"FaceColor","flat"); ylim([minY maxY]); xlabel("Individual index");
 
-    for k=0:max(individual_mode(:,3))
-        RFgroup = individual_mode(individual_mode(:,3)==k,:);
-        temp2.CData(RFgroup(:,size(RFgroup,2)),:) = reshape(repelem(RFcolors(k+1,:), size(RFgroup,1)), size(RFgroup,1), 3);
-    end
+    % for k=0:max(individual_mode(:,3))
+    %     RFgroup = individual_mode(individual_mode(:,3)==k,:);
+    %     temp2.CData(RFgroup(:,size(RFgroup,2)),:) = reshape(repelem(RFcolors(k+1,:), size(RFgroup,1)), size(RFgroup,1), 3);
+    % end
 
     % Add error bars
     er = errorbar(1:size(individual_mode,1), individual_mode(:,1), individual_mode(:,2), individual_mode(:,2));
@@ -105,12 +103,12 @@ for i=0:(numFactors-1)
     er.LineStyle = 'none';  
 
     % ID vector legend
-    h = zeros(3, 1);
-    h(1) = plot(NaN,NaN,'s', "MarkerEdgeColor", RFcolors(1,:), "MarkerFaceColor", RFcolors(1,:));
-    h(2) = plot(NaN,NaN,'s', "MarkerEdgeColor", RFcolors(2,:), "MarkerFaceColor", RFcolors(2,:));
-    h(3) = plot(NaN,NaN,'s', "MarkerEdgeColor", RFcolors(3,:), "MarkerFaceColor", RFcolors(3,:));
-    legend(h, {'Low response','Mid response','High response'}, "Location", 'southoutside', "Orientation", "horizontal");
-    hold off;
+    % h = zeros(3, 1);
+    % h(1) = plot(NaN,NaN,'s', "MarkerEdgeColor", RFcolors(1,:), "MarkerFaceColor", RFcolors(1,:));
+    % h(2) = plot(NaN,NaN,'s', "MarkerEdgeColor", RFcolors(2,:), "MarkerFaceColor", RFcolors(2,:));
+    % h(3) = plot(NaN,NaN,'s', "MarkerEdgeColor", RFcolors(3,:), "MarkerFaceColor", RFcolors(3,:));
+    % legend(h, {'Low response','Mid response','High response'}, "Location", 'southoutside', "Orientation", "horizontal");
+    % hold off;
 
     % Time vector
     subplot(numFactors, 3, 3+i*3), hold on;
@@ -118,7 +116,7 @@ for i=0:(numFactors-1)
     maxY = max(time_mode(:,1) + time_mode(:,2));
     plot(visitXlabel, time_mode(:,1)); ylim([minY maxY]); xlabel("Days"); xlim([min(visitXlabel) max(visitXlabel)]);
     yl = ylim;
-    patch([0 14 14 0], [yl(1) yl(1) yl(2) yl(2)], 'red', "FaceAlpha", 0.3);
+    %patch([0 14 14 0], [yl(1) yl(1) yl(2) yl(2)], 'red', "FaceAlpha", 0.3);
     errorbar(visitXlabel, time_mode(:,1), time_mode(:,2), "-", "Color", "black"); %xlabel("Days"); ylim([yl(1) yl(2)]);
     hold off;
     

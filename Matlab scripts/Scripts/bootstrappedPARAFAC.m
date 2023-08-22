@@ -12,16 +12,30 @@ Options(6) = 2500;   % max number of iterations (default 2500)
 const = [0 0 0];    % PARAFAC mode constraints, currently none
 
 % Find individual groups
-RFlow = find(individual_metadata(:,2) == "0");
-RFmid = find(individual_metadata(:,2) == "1");
-RFhigh = find(individual_metadata(:,2) == "2");
+subjectGroups = unique(individual_metadata(:,2));
+numSubjectGroups = size(subjectGroups, 1);
+groupMembership = {};
+
+for i=1:numSubjectGroups
+    groupMembership{i} = find(individual_metadata(:,2) == subjectGroups(i));
+end
 
 % Establish which individuals to remove randomly
-combinations = nchoosek(1:I, 3);
-combinations_low = ismember(combinations, RFlow);
-combinations_mid = ismember(combinations, RFmid);
-combinations_high = ismember(combinations, RFhigh);
-valid = sum(combinations_low,2) == 1 & sum(combinations_mid,2) == 1 & sum(combinations_high,2) == 1;
+combinations = nchoosek(1:I, numSubjectGroups);
+combinationGroups = {};
+
+for i=1:numSubjectGroups
+    combinationGroups{i} = ismember(combinations, groupMembership{i});
+end
+
+% Check for balanced jack-knifing - one subject from each group must be
+% removed.
+valid = ones(size(combinations,1), 1);
+
+for i=1:numSubjectGroups
+    valid = valid & (sum(combinationGroups{i},2) == 1);
+end
+
 combinations = combinations(valid,:);
 %maxIterations = size(combinations, 1);
 
