@@ -1,0 +1,3 @@
+"0","# Real data"
+"0","PCAmodel = prcomp(real_df, rank=2, scale=TRUE, center=TRUE)"
+"0","fviz_eig(PCAmodel)"

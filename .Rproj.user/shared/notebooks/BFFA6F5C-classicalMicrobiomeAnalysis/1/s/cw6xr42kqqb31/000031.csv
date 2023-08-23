@@ -1,0 +1,9 @@
+"0","# Real data"
+"0","d = vegdist(closest_df, method=""bray"")"
+"2","Warning: results may be meaningless because data have negative entries
+                 in method “bray”"
+"0","BC_pcoa = pcoa(d)"
+"0",""
+"0","plottableData = BC_pcoa$vectors %>% as_tibble() %>% mutate(timepoint = rep(1:7, each=41), subject = rep(1:41, each=7)) %>% left_join(subjectMeta)"
+"2","Joining with `by = join_by(subject)`"
+"0","plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(subject))) + geom_point() + ggtitle(""Real"")"

@@ -1,0 +1,7 @@
+"0","e = rowSums(real_df) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..),bins=50) + scale_x_log10(limits=c(1e3,1e5)) + ggtitle(""Real library size"")"
+"0","f = rowSums(closest_df) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..),bins=50) + scale_x_log10(limits=c(1e3,1e5)) + ggtitle(""Simulated - real vectors"")"
+"0","g = rowSums(adapted_df) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..),bins=50) + scale_x_log10(limits=c(1e3,1e5)) + ggtitle(""Simulated - random A&B"")"
+"0","h = rowSums(weird_df) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..),bins=50) + scale_x_log10(limits=c(1e3,1e5)) + ggtitle(""Simulated - custom made"")"
+"0","ggarrange(e,f,g,h)"
+"2","Warning: [38;5;255mRemoved 6 rows containing non-finite values (`stat_bin()`).[39m"
+"2","Warning: [38;5;255mRemoved 23 rows containing non-finite values (`stat_bin()`).[39m"

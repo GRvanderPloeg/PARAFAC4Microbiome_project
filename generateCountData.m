@@ -5,19 +5,17 @@ addpath(".\Matlab scripts\N-way toolbox\"); % from Rasmus Bro
 
 %%
 % Define properties of the simulation
-A_relative_strength = 1.0;
-B_relative_strength = 1.0;
-C_relative_strength = 1.0;
 
 % Subject loadings
-Ameans = [1 -3; -7 10]; % rows is component, cols is RFgroup
-Astds = [10 10; 10 10];   % rows is component, cols is RFgroup
-Anum = [25 25];               % number of subjects per RFgroup
+Ameans = [1 -1.1; -0.3 0.6];  % rows is component, cols is RFgroup
+Astds = [10 10; 10 10];             % rows is component, cols is RFgroup
+Anum = [25 25];                 % number of subjects per RFgroup
+Amultiplier = 1;                % added variation (multiplicative)
 
 % Feature loadings
-Bmeans = [3 -5 -2 1; 1 -1 -2 5]; % rows is component, cols is feature group
-Bstds = [5 5 5 5; 5 5 5 5]; % rows is component, cols is feature group
-Bnum = [25 25 25 25];
+Bmeans = [0.075 0.075 0.075 0.075 0.075 0.075 0.075; 0.075 0.075 0.075 0.075 0.075 0.075 0.075]; % rows is component, cols is feature group
+Bstds = [0.075 0.075 0.075 0.075 0.075 0.075 0.075; 0.075 0.075 0.075 0.075 0.075 0.075 0.075]; % rows is component, cols is feature group
+Bnum = [10 10 10 10 10 10 10];
 
 % Time loadings
 C = [0.1 0.9; 0.11 0.8; 0.2 0.65; 0.55 0.55; 0.3 0.5; 0.25 0.44; 0.2 0.3; 0.11 0.25; 0.1 0.65];
@@ -90,6 +88,8 @@ Bmeta = string(Bmeta);
 %     B(:,n) = B(:,n) / norm(B(:,n));
 %     C(:,n) = C(:,n) / norm(C(:,n));
 % end
+% 
+% A = A * Amultiplier; % put the variation back in
 
 %%
 % Create processed matrix from vectors
