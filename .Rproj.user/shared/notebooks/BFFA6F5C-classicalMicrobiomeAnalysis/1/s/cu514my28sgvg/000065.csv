@@ -1,2 +1,0 @@
-"0","PCAmodel$rotation %>% as_tibble() %>% mutate(asv=rownames(PCAmodel$rotation)) %>% left_join(taxa) %>% ggplot(aes(x=PC1,y=PC2,col=as.factor(Phylum))) + geom_point()"
-"2","Joining with `by = join_by(asv)`"

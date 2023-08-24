@@ -1,0 +1,3 @@
+"0","PCAmodel$rotation %>% as_tibble() %>% mutate(asv=rownames(PCAmodel$rotation)) %>% left_join(taxa) %>% ggplot(aes(x=PC1,y=PC2,col=as.factor(Genus))) + geom_point()"
+"1","[38;5;245mJoining, by = ""asv""[39m
+"

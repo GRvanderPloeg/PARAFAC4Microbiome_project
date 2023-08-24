@@ -1,0 +1,27 @@
+{
+    "id": "72B18AF8",
+    "path": "~/Github/PARAFAC4Microbiome/classicalMicrobiomeAnalysis.Rmd",
+    "project_path": "classicalMicrobiomeAnalysis.Rmd",
+    "type": "r_markdown",
+    "hash": "2963266543",
+    "contents": "",
+    "dirty": false,
+    "created": 1692877602677.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "323,76",
+        "scrollLine": "304",
+        "last_setup_crc32": "1F53C22B41d7313"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1692890141,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1692890141975,
+    "read_only": false,
+    "read_only_alternatives": []
+}

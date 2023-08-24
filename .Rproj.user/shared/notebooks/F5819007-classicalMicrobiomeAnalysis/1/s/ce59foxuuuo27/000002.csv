@@ -1,0 +1,65 @@
+"0","real_df = read.csv(""./TIFN/filtered_count_data.csv"", header=FALSE) %>% as_tibble()"
+"0","closest_df = read.csv(""./20230821_fakeTongue_noRes_data.csv"", header=FALSE) %>% as_tibble()"
+"0","adapted_df = read.csv(""./20230821_randomAB_noRes_data.csv"", header=FALSE) %>% as_tibble()"
+"0","weird_df = read.csv(""./20230822_onlyTimePattern_noRes_data.csv"", header=FALSE) %>% as_tibble()"
+"0",""
+"0","sum(real_df == 0) / (nrow(real_df) * ncol(real_df))"
+"1","[1]"
+"1"," 0.2235772"
+"1","
+"
+"0","sum(closest_df == 0) / (nrow(closest_df) * ncol(closest_df))"
+"1","[1]"
+"1"," 0.0264451"
+"1","
+"
+"0","sum(adapted_df == 0) / (nrow(adapted_df) * ncol(adapted_df))"
+"1","[1]"
+"1"," 0.03573662"
+"1","
+"
+"0","sum(weird_df == 0) / (nrow(weird_df) * ncol(weird_df))"
+"1","[1]"
+"1"," 0.06948413"
+"1","
+"
+"0","a = unlist(c(real_df+1)) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + scale_x_log10(limits=c(1e-1,1e5)) + ggtitle(""Real count data"")"
+"0","b = unlist(c(closest_df+1)) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + scale_x_log10(limits=c(1e-1,1e5)) + ggtitle(""Simulated - real vectors"")"
+"0","c = unlist(c(adapted_df+1)) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + scale_x_log10(limits=c(1e-1,1e5)) + ggtitle(""Simulated - random A&B"")"
+"0","d = unlist(c(weird_df+1)) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + scale_x_log10(limits=c(1e-1,1e5)) + ggtitle(""Simulated - custom made"")"
+"0","ggarrange(a,b,c,d)"
+"2","Warning:"
+"2"," [38;5;245mThe dot-dot notation (`..density..`) was deprecated in ggplot2 3.4.0.
+[36mi[38;5;245m Please use `after_stat(density)` instead.
+[90mThis warning is displayed once every 8 hours.[38;5;245m
+[90mCall `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.[38;5;245m[39m
+"
+"1","[38;5;245m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;245mRemoved 2 rows containing missing values (`geom_bar()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;245mTransformation introduced infinite values in continuous x-axis[39m
+"
+"1","[38;5;245m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;245mRemoved 140 rows containing non-finite values (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;245mRemoved 2 rows containing missing values (`geom_bar()`).[39m
+"
+"1","[38;5;245m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;245mRemoved 7 rows containing non-finite values (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;245mRemoved 2 rows containing missing values (`geom_bar()`).[39m
+"
+"1","[38;5;245m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;245mRemoved 2 rows containing missing values (`geom_bar()`).[39m
+"

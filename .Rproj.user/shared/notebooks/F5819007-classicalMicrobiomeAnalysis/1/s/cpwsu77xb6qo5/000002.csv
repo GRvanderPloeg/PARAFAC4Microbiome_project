@@ -1,0 +1,9 @@
+"0","# Richness over time and/or between groups"
+"0",""
+"0","plottableData = cbind(df_meta, specnumber(df_numeric)) %>%"
+"0","  as_tibble() %>% "
+"0","  left_join(rf) %>% "
+"0","  mutate(richness=`specnumber(df_numeric)`)"
+"1","[38;5;245mJoining, by = ""subject""[39m
+"
+"0","plottableData %>% ggplot(aes(x=as.factor(visit),y=richness,fill=as.factor(RFgroup))) + geom_boxplot()"

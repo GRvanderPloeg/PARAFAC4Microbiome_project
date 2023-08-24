@@ -1,6 +1,0 @@
-"0","df_num_filtered = df_numeric[,(colSums(df_numeric == 0) / nrow(df_numeric)) <= 0.5]"
-"0","relAbs = apply(df_num_filtered, 1, FUN=function(x){x / sum(x)}) %>% t() %>% as_tibble()"
-"0","rownames(relAbs) = paste0(df_meta$subject, ""_"", df_meta$visit)"
-"2","Warning: Setting row names on a tibble is deprecated."
-"0","PCAmodel = prcomp(relAbs, rank=2, center=TRUE, scale=TRUE)"
-"0","fviz_eig(PCAmodel)"

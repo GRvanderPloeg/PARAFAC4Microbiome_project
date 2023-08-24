@@ -1,0 +1,3 @@
+"0","# Simulated data"
+"0","PCAmodel = prcomp(df, rank=2, scale=TRUE, center=TRUE)"
+"0","fviz_eig(PCAmodel)"

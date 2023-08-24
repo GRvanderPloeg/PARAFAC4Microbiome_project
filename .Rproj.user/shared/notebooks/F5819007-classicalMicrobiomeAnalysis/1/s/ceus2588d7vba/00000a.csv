@@ -1,0 +1,8 @@
+"0","fviz_pca_ind(PCAmodel,"
+"0","             col.ind = ""cos2"", # Color by the quality of representation"
+"0","             gradient.cols = c(""#00AFBB"", ""#E7B800"", ""#FC4E07""),"
+"0","             repel = TRUE     # Avoid text overlapping"
+"0","             )"
+"2","Warning:"
+"2"," ggrepel: 397 unlabeled data points (too many overlaps). Consider increasing max.overlaps
+"
