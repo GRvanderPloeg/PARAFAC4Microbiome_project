@@ -1,186 +1,116 @@
-# Generate count data
-library(tidyverse)
-library(patchwork)
-library(timeOmics)
-library(tscount)
-set.seed(1234)
+# Simulate microbiome count data with metaSPARSim
+library(metaSPARSim)
+library(rTensor)
 
-# Kodikara et al. - clustering simulated data based on time profiles
-# RAW DATA
-c1.0 <- c(0, 0.5,1,1.1,1.2,1.8,2.5,5,9)
-c2.0<-c(-1, 8, -1, 0, 0.5, -2.5, -3, 2, 2)
-c3.0 <-  c(-2,4, 8, 6,4.5,4,3.9, 3, 1)
-c4.0 <- c(2, -5, 1, -4, 0.5, -3.5, 0, -3,0.5)
+rlang::global_entrace()
+options(rlang_backtrace_on_warning_report = "full")
+options(rlang_backtrace_on_error_report = "full")
 
-lst <-list()
-lst[["c1.0"]]<-c1.0
-lst[["c2.0"]]<-c2.0
-lst[["c3.0"]]<-c3.0
-lst[["c4.0"]]<-c4.0
-
-for(i in 1:49){
-  a<-round(rnorm(1,2,1),1)  # get random value with mean 2 and sd 1 and round it to one digit after the comma
-  b<-round(rnorm(1,2,1),1)  # i.e. this is generally 2.0 but can be 1.0 or 3.0
-  z1<-(c1.0+a)*abs(b+1)     # add it as offset + multiplicative factor
-  z2<-(c2.0+a)*abs(b+1)
-  z3<-(c3.0+a)*abs(b+1)
-  z4<-(c4.0+a)*abs(b+1)
-  lst[[paste0("c1.", i)]]<-assign(paste0("c1.", i),z1)
-  lst[[paste0("c2.", i)]]<-assign(paste0("c2.", i),z2)
-  lst[[paste0("c3.", i)]]<-assign(paste0("c3.", i),z3)
-  lst[[paste0("c4.", i)]]<-assign(paste0("c4.", i),z4)
-}
-raw.data<-lst[order(names(lst))]
-
-generate_LMMS_data <- function(raw_data, N_Ind, noise){
-  data.gather <- raw_data %>% as.data.frame() %>% rownames_to_column("time") %>%
-    gather(feature, value, -time)
-  for(ind in 1:N_Ind){
-    vect <- vector(length = nrow(data.gather), mode = "numeric")
-    for(x in 1:length(vect)){
-      vect[x] <- rnorm(1, mean = data.gather$value[x], sd = noise)
-    }
-    names.tmp <- colnames(data.gather)
-    data.gather <- data.frame(data.gather, vect)
-    colnames(data.gather) <- c(names.tmp, LETTERS[ind])
-  }
-  sim_data <- data.gather %>% dplyr::select(-c(value)) %>%
-    gather(ind, value, -c(time, feature)) %>%
-    mutate(sample = paste0(ind, "_", time)) %>%
-    dplyr::select(feature, value, sample) %>%
-    spread(feature, value) %>%
-    column_to_rownames("sample") %>%
-    as.matrix()
-  return(sim_data)
-}
-
-
-sim_lmm<-function(rawData,noise, nInd){
-  s1<-generate_LMMS_data(rawData,nInd,noise)
-  time <- rep(1:9, nInd)
+simulateCountData = function(subjectLoadings, featureLoadings, timeLoadings, numSubjectsPerGroup, numFeaturesPerGroup,
+                             relativeNoise, avgLibSize, stdLibSize){
   
-  lmms.output <- lmms::lmmSpline(data = s1, time = time,
-                                 sampleID = rownames(s1), deri = FALSE,
-                                 basis = "p-spline", numCores = 4, timePredict = 1:9,
-                                 keepModels = TRUE)
-  modelled.data <- t(slot(lmms.output, 'predSpline'))
-  return(modelled.data)
-}
-
-rawData<-raw.data
-nInd<-5
-noise<-c(0.5,1.5,3)
-n_iter <- 10 # Number of iterations of the loop
-
-for (i in noise){
-  list_of_frames <- replicate(n_iter, data.frame())
-  for(j in 1:n_iter) {
-    print(j)
-    df_Scenario1<-sim_lmm(rawData,i,nInd)
-    list_of_frames[[j]] <-df_Scenario1
-  }
-  #saveRDS(list_of_frames,file =  paste0("Data/clusData_",i,".Rdata")) 
-}
-
-# Kodikara et al. - differential abundance analysis based on simulated data
-simulate<-function(mod,para, nIndiv, nTime,disper, nTaxa, nSc1, nSc2, nSc3, meta){
+  set.seed(1)
+  # Number of components is assumed to be the same for all modes, otherwise
+  # PARAFAC would not be an appropriate model to use anyway.
+  numTimepoints = nrow(timeLoadings)
+  numComponents = nrow(subjectLoadings)
+  numSubjects = sum(numSubjectsPerGroup)
+  numFeatures = sum(numFeaturesPerGroup)
+  numSubjectGroups = length(numSubjectsPerGroup)
+  numFeatureGroups = length(numFeaturesPerGroup)
   
-  TAXA<-setNames(data.frame(matrix(ncol = nTaxa, 
-                                   nrow = nIndiv*nTime)),paste0("Taxa_",1:nTaxa))
+  # Create trilinear structure
+  abundanceTable = list()
+  coreArray = subjectLoadings %*% t(khatri_rao(timeLoadings, featureLoadings)) # matricized array
   
-  for(i in 1:nTaxa){
-    if(i<=nSc1){#Time
-      k=1
-    }else if(i<=nSc1+nSc2){#Group
-      k=2
-    }else if(i<=nSc1+nSc2+nSc3){#Time+Group+Time*Group
-      k=3
-    }else {#No
-      k=4
-    }
-    count<-c()
-    for(j in 1:nIndiv){
-      t<-c(tsglm.sim(n=nTime, param = para[[k]], model=model, 
-                     xreg=matrix(c(1:nTime,
-                                   rep(meta$Group[meta$Indiv==j][1],nTime),
-                                   1:nTime*rep(meta$Group[meta$Indiv==j][1],nTime)),ncol=3), 
-                     link="identity",
-                     distr="nbinom", distrcoefs=c(size=1/disper))$ts)
-      count<-c(count,t)
-    }
-    while(!any(count==0)){#At least one zero (Needed to run ZIGMM)
-      count<-c()
-      for(j in 1:nIndiv){
-        t<-c(tsglm.sim(n=nTime, param = para[[k]], model=model, 
-                       xreg=matrix(c(1:nTime,rep(meta$Group[meta$Indiv==j][1],nTime),
-                                     1:nTime*rep(meta$Group[meta$Indiv==j][1],nTime)),ncol=3),
-                       link="identity",
-                       distr="nbinom", distrcoefs=c(size=1/disper))$ts)
-        count<-c(count,t)
-      } 
-    }
-    TAXA[,i]<-count
+  for(i in 1:numTimepoints){
+    abundanceTable[[i]] = coreArray[,(2*i-1):(2*i)]
   }
   
+  # Correction for negativity
+  # I think this is wrong, but I don't know how to fix it yet.
+  # For now, avoid using negative loadings.
   
-  return(TAXA)
+  # correctionTerm = abs(min(unlist(abundanceTable))) + 0.01 # to avoid adding zeroes
+  # for(i in 1:numTimepoints){
+  #   abundanceTable[[i]] = abundanceTable[[i]] + correctionTerm
+  # }
+  
+  # Prepare modelling parameters per timepoint and simulate.
+  params = list()
+  paramIterator = 1
+  featureIntensities = rnbinom(numFeatures, size=0.033, mu=15.75)
+  featureVariability = rnorm(numFeatures, mean=3.6, sd=1.5)
+
+  for(i in 1:numTimepoints){
+    for(j in 1:numSubjectGroups){
+      param = list()
+      param$intensity = c()
+      param$variability = c()
+      for(k in 1:numFeatureGroups){
+        param$intensity = c(param$intensity, rep(abundanceTable[[i]][j,k], numFeaturesPerGroup[k]))
+        #param$variability = c(param$variability, rep(abundanceTable[[i]][j,k], numFeaturesPerGroup[k]))
+      }
+      param$intensity = featureIntensities * param$intensity
+      #param$variability = param$variability * relativeNoise
+      param$variability = featureVariability
+      param$lib_size = round(rnorm(numSubjectsPerGroup[j], mean=avgLibSize, sd=stdLibSize))
+      params[[paramIterator]] = param
+      paramIterator = paramIterator + 1
+    }
+  }
+  names(params) = paste0("situation_", 1:(paramIterator-1))
+  simResults = metaSPARSim(params)
+  
+  return(list(abundanceTable, simResults))
 }
 
-set.seed(1234)
-model <- list(past_obs=1) #Only 1 AR parameter
-disp_1<-0.1
-param_1 <- list(list(intercept=runif(1,0,5), past_obs=0.04,  xreg=c(1.5,0,0)),
-                list(intercept=runif(1,0,5), past_obs=0.04,  xreg=c(0,13,0)),
-                list(intercept=runif(1,0,5), past_obs=0.04,  xreg=c(1.5,13,5)),
-                list(intercept=runif(1,0,5), past_obs=0.04,  xreg=c(0,0,0)))
+# Rows: subject, features; columns: components
+subjectLoadings = rbind(c(0.1, 1.0),
+                        c(0.1, 0.5)) 
 
-nIndiv=20;nTime=10
-metaDF<-data.frame(Time=rep(c(1:nTime),nIndiv),
-                   Indiv=rep(1:nIndiv,each=nTime),
-                   Group=rep(0:1,each=nIndiv*nTime/2))
+featureLoadings = rbind(c(0.8, 0.1),
+                        c(0.1, 0.5))
 
-n_iter <- 10 # Number of iterations of the loop
-list_of_frames <- replicate(n_iter, data.frame())
-# Initializes the progress bar
-pb <- txtProgressBar(min = 0,      # Minimum value of the progress bar
-                     max = n_iter, # Maximum value of the progress bar
-                     style = 3,    # Progress bar style
-                     width = 50,   # Progress bar width
-                     char = "=")   # Character used to create the bar
+timeLoadings = t(rbind(c(0.1, 0.11, 0.2, 0.55, 0.3, 0.25, 0.2, 0.11, 0.1),
+                     c(0.9, 0.8, 0.65, 0.55, 0.5, 0.44, 0.3, 0.25, 0.65)))
 
-for(i in 1:n_iter) {
-  
-  #---------------------
-  # Code to be executed
-  #---------------------
-  df_Scenario1<-simulate(model,param_1,nIndiv,nTime, disp_1, 300, 10,10,10,metaDF)
-  list_of_frames[[i]] <-df_Scenario1
-  #---------------------
-  
-  # Sets the progress bar to the current state
-  setTxtProgressBar(pb, i)
+numSubjectsPerGroup = c(10, 10)
+numFeaturesPerGroup = c(20, 20)
+relativeNoise = 0.0
+avgLibSize = 10000
+stdLibSize = 0
+
+outcome = simulateCountData(subjectLoadings, featureLoadings, timeLoadings, numSubjectsPerGroup, numFeaturesPerGroup,
+                            relativeNoise, avgLibSize, stdLibSize)
+
+# Construct additional metadata (especially useful in unbalanced cases)
+subjectMetadata = c()
+for(i in 1:numTimepoints){
+  for(j in 1:length(numSubjectsPerGroup)){
+    subjectMetadata = c(subjectMetadata, rep(LETTERS[j], numSubjectsPerGroup[j]))
+  }
 }
+subjectMetadata = cbind(1:sum(numSubjectsPerGroup), subjectMetadata)
 
-close(pb) # Close the connection
+featureMetadata = c()
+for(i in 1:length(numFeaturesPerGroup)){
+  featureMetadata = c(featureMetadata, rep(LETTERS[i], numFeaturesPerGroup[i]))
+}
+featureMetadata = cbind(1:sum(numFeaturesPerGroup), featureMetadata)
 
-c_Sc1<-lapply(list_of_frames, function(x) {
-  mutate(x,Library_size=rowSums(x))
-})
+# Save data
+write.table(subjectMetadata, "./subjectMetadata.csv", sep=",", row.names=FALSE, col.names=FALSE)
+write.table(featureMetadata, "./featureMetadata.csv", sep=",", row.names=FALSE, col.names=FALSE)
+write.table(subjectLoadings, "./subjectLoadings.csv", sep=",", row.names=FALSE, col.names=FALSE)
+write.table(featureLoadings, "./featureLoadings.csv", sep=",", row.names=FALSE, col.names=FALSE)
+write.table(timeLoadings, "./timeLoadings.csv", sep=",", row.names=FALSE, col.names=FALSE)
+write.table(t(outcome[[2]]$counts), "./simData.csv", sep=",", row.names=FALSE, col.names=TRUE)
+write.table(do.call(cbind, outcome[[1]]), "./coreArray.csv", sep=",", row.names=FALSE, col.names=TRUE)
 
-ra_Sc1<-lapply(c_Sc1, function(x) {
-  x[,-301]/x$Library_size
-})
-
-# My own work
-realData = read.csv("./Martino2021/data/Halfvarson-IBD-Qiita-1629/table-matched.tsv", sep="\t", header=FALSE, skip=1)
-hist(unlist(c(realData[,2:135])))
-
-lambda_t = beta_0 + beta_1 * y_t_minus_1 + n_1*t + n_2*X + n_3*t*X
-
-n_1 = 0 # time effect parameter
-n_2 = 0 # group effect parameter
-n_3 = 0 # time x group effect parameter
-
-beta_0 = 1 # intercept parameter
-beta_1 = 0.6 # auto-regression parameter
-disp = 0.4 # dispersion parameter
+# Simulate based on real data
+# data(HMP)
+# params = estimate_parameter_from_data(data, data_norm, indpop,perc_not_zeros=.2)
+# names(params)<-names(indpop)
+# sim_data = metaSPARSim(params)
+# write.table(sim_data$counts, "./simHMPData.csv", sep=",", row.names=FALSE, col.names=TRUE)

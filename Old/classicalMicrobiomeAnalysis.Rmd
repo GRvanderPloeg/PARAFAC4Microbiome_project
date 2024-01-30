@@ -1,0 +1,340 @@
+---
+title: "classicalMicrobiomeAnalysis"
+output: html_document
+date: "2023-08-22"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(factoextra)
+library(vegan)
+library(ape)
+library(ggpubr)
+library(DESeq2)
+```
+
+```{r load data}
+df = read.csv("tempData.csv", header=FALSE) %>% as_tibble()
+subjectMeta = read.csv("subjectMetadata.csv", header=FALSE) %>% as_tibble()
+colnames(subjectMeta) = c("subject", "RFgroup")
+featureMeta = read.csv("featureMetadata.csv", header=FALSE) %>% as_tibble()
+colnames(featureMeta) = c("feature", "FeatureGroup")
+
+subjectLoadings = read.csv("subjectLoadings.csv", header=FALSE) %>% as_tibble()
+featureLoadings = read.csv("featureLoadings.csv", header=FALSE) %>% as_tibble()
+timeLoadings = read.csv("timeLoadings.csv", header=FALSE) %>% as_tibble()
+```
+
+```{r simulated data properties}
+real_df = read.csv("./TIFN/filtered_count_data.csv", header=FALSE) %>% as_tibble()
+closest_df = read.csv("./20230821_fakeTongue_noRes_data.csv", header=FALSE) %>% as_tibble()
+adapted_df = read.csv("./20230821_randomAB_noRes_data.csv", header=FALSE) %>% as_tibble()
+weird_df = read.csv("./20230822_onlyTimePattern_noRes_data.csv", header=FALSE) %>% as_tibble()
+
+sum(real_df == 0) / (nrow(real_df) * ncol(real_df))
+sum(closest_df == 0) / (nrow(closest_df) * ncol(closest_df))
+sum(adapted_df == 0) / (nrow(adapted_df) * ncol(adapted_df))
+sum(weird_df == 0) / (nrow(weird_df) * ncol(weird_df))
+
+a = unlist(c(real_df+1)) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + scale_x_log10(limits=c(1e-1,1e5)) + ggtitle("Real count data")
+b = unlist(c(closest_df+1)) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + scale_x_log10(limits=c(1e-1,1e5)) + ggtitle("Simulated - real vectors")
+c = unlist(c(adapted_df+1)) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + scale_x_log10(limits=c(1e-1,1e5)) + ggtitle("Simulated - random A&B")
+d = unlist(c(weird_df+1)) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + scale_x_log10(limits=c(1e-1,1e5)) + ggtitle("Simulated - custom made")
+ggarrange(a,b,c,d)
+
+e = rowSums(real_df) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..),bins=50) + scale_x_log10(limits=c(1e3,1e5)) + ggtitle("Real library size")
+f = rowSums(closest_df) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..),bins=50) + scale_x_log10(limits=c(1e3,1e5)) + ggtitle("Simulated - real vectors")
+g = rowSums(adapted_df) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..),bins=50) + scale_x_log10(limits=c(1e3,1e5)) + ggtitle("Simulated - random A&B")
+h = rowSums(weird_df) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..),bins=50) + scale_x_log10(limits=c(1e3,1e5)) + ggtitle("Simulated - custom made")
+ggarrange(e,f,g,h)
+
+i = specnumber(real_df) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + xlim(0,100) + ggtitle("Real richness")
+j = specnumber(closest_df) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + xlim(0,100) + ggtitle("Simulated - real vectors")
+k = specnumber(adapted_df) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + xlim(0,100) + ggtitle("Simulated - random A&B")
+l = specnumber(weird_df) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + xlim(0,100) + ggtitle("Simulated - custom made")
+ggarrange(i,j,k,l)
+
+m = diversity(real_df+1) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + xlim(1,4) + ggtitle("Real evenness")
+n = diversity(closest_df+1) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + xlim(1,4) + ggtitle("Simulated - real vectors")
+o = diversity(adapted_df+1) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + xlim(1,4) + ggtitle("Simulated - random A&B")
+p = diversity(weird_df+1) %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(aes(y=..density..)) + xlim(1,4) + ggtitle("Simulated - custom made")
+ggarrange(m,n,o,p)
+```
+
+```{r the truth}
+subjectLoadings %>% mutate(RFgroup = subjectMeta$RFgroup) %>% ggplot(aes(x=V1,y=V2,col=as.factor(RFgroup))) + geom_point()
+featureLoadings %>% mutate(FeatureGroup = featureMeta$FeatureGroup) %>% ggplot(aes(x=V1,y=V2,col=as.factor(FeatureGroup))) + geom_point()
+timeLoadings %>% ggplot(aes(x=1:nrow(.),y=V1)) + geom_line()
+timeLoadings %>% ggplot(aes(x=1:nrow(.),y=V2)) + geom_line()
+```
+
+```{r classical PCA}
+# Real data
+PCAmodel = prcomp(closest_df, rank=2, scale=TRUE, center=TRUE)
+fviz_eig(PCAmodel)
+fviz_pca_ind(PCAmodel,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+fviz_pca_var(PCAmodel,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+# Simulated data
+PCAmodel = prcomp(df, rank=2, scale=TRUE, center=TRUE)
+fviz_eig(PCAmodel)
+fviz_pca_ind(PCAmodel,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+fviz_pca_var(PCAmodel,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+```
+
+```{r PCoA - bray-curtis}
+# Real data
+d = vegdist(closest_df, method="bray")
+BC_pcoa = pcoa(d)
+
+plottableData = BC_pcoa$vectors %>% as_tibble() %>% mutate(timepoint = rep(1:7, each=41), subject = rep(1:41, each=7)) %>% left_join(subjectMeta)
+
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(subject))) + geom_point() + ggtitle("Real")
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point() + ggtitle("Real")
+#plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(RFgroup))) + geom_point()
+
+# Simulated data
+d = vegdist(df, method="bray")
+BC_pcoa = pcoa(d)
+
+plottableData = BC_pcoa$vectors %>% as_tibble() %>% mutate(timepoint = rep(1:nrow(timeLoadings), each=nrow(subjectMeta)), subject = rep(1:nrow(subjectLoadings), each=nrow(timeLoadings))) %>% left_join(subjectMeta)
+
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(subject))) + geom_point() + ggtitle("Sim")
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point() + ggtitle("Sim")
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(RFgroup))) + geom_point() + ggtitle("Sim")
+```
+
+```{r PCoA - aitchison}
+# Real data
+pseudocount = 2
+d = vegdist(closest_df+pseudocount, method="aitchison")
+A_pcoa = pcoa(d)
+
+plottableData = A_pcoa$vectors %>% as_tibble() %>% mutate(timepoint = rep(1:7, each=41), subject = rep(1:41, each=7))
+
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(subject))) + geom_point() + ggtitle("Real")
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point() + ggtitle("Real")
+#plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(RFgroup))) + geom_point()
+
+# Simulated data
+pseudocount = 1
+d = vegdist(df+pseudocount, method="aitchison")
+A_pcoa = pcoa(d)
+
+plottableData = A_pcoa$vectors %>% as_tibble() %>% mutate(timepoint = rep(1:nrow(timeLoadings), each=nrow(subjectMeta)), subject = rep(1:nrow(subjectLoadings), each=nrow(timeLoadings))) %>% left_join(subjectMeta)
+
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(subject))) + geom_point() + ggtitle("Sim")
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point() + ggtitle("Sim")
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(RFgroup))) + geom_point() + ggtitle("Sim")
+```
+
+```{r PCoA - Jensen-shannon}
+d = philentropy::JSD(as.matrix(df))
+JS_pcoa = pcoa(d)
+
+plottableData = JS_pcoa$vectors %>% as_tibble() %>% mutate(timepoint = rep(1:nrow(timeLoadings), each=nrow(subjectMeta)), subject = rep(1:nrow(subjectLoadings), each=nrow(timeLoadings))) %>% left_join(subjectMeta)
+
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(subject))) + geom_point()
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point()
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(RFgroup))) + geom_point()
+``` 
+
+```{r testing differential abundance}
+df2 = df %>% mutate(timepoint = rep(1:nrow(timeLoadings), each=nrow(subjectMeta)), subject = rep(1:nrow(subjectLoadings), each=nrow(timeLoadings))) %>% filter(timepoint == 1 | timepoint == 4)
+
+condition = as.factor(df2$timepoint)
+dds <- DESeqDataSetFromMatrix(countData = t(df2 %>% select(-timepoint,-subject)+1),
+                              colData = DataFrame(condition),
+                              design = ~ condition)
+dds <- DESeq(dds)
+result = results(dds)
+
+result %>% as_tibble() %>% mutate(p = -log10(padj)) %>% ggplot(aes(x=log2FoldChange,y=p)) + geom_point() + ylab("-1*log10(padj)")
+```
+
+# Temporary solution: TIFN data analysis
+
+```{r Import red fluorescence data}
+rf_data = read.csv("./TIFN/RFdata.csv")
+colnames(rf_data) = c("subject", "id", "fotonr", "day", "group", "RFgroup", "MQH", "SPS(tm)", "Area_delta_R30", "Area_delta_Rmax", "Area_delta_R30_x_Rmax", "gingiva_mean_R_over_G", "gingiva_mean_R_over_G_upper_jaw", "gingiva_mean_R_over_G_lower_jaw")
+rf_data = rf_data %>% as_tibble()
+
+rf_data[rf_data$subject == "VSTPHZ", 1] = "VSTPH2"
+rf_data[rf_data$subject == "D2VZH0", 1] = "DZVZH0"
+rf_data[rf_data$subject == "DLODNN", 1] = "DLODDN"
+rf_data[rf_data$subject == "O3VQFX", 1] = "O3VQFQ"
+rf_data[rf_data$subject == "F80LGT", 1] = "F80LGF"
+rf_data[rf_data$subject == "26QQR0", 1] = "26QQrO"
+
+rf_data2 = read.csv("./TIFN/red_fluorescence_data.csv") %>% as_tibble()
+rf_data2 = rf_data2[,c(2,4,181:192)]
+rf_data = rf_data %>% left_join(rf_data2)
+
+rf = rf_data %>% select(subject, RFgroup) %>% unique()
+```
+
+```{r Import microbiome data}
+microbiome.raw = read.csv("./TIFN/count-table.tsv", sep="\t")
+taxa = read.csv("./TIFN/taxonomic-classification.tsv", sep="\t")
+selectedIndividuals = microbiome.raw %>% as_tibble() %>% filter(group == "control") %>% select(subject) %>% pull %>% unique
+
+df = microbiome.raw %>% as_tibble() %>% filter(group == "control", niche == "lower jaw, lingual")
+df_meta = df[,1:5]
+df_numeric = df[,6:ncol(df)]
+```
+
+```{r richness analysis}
+# Richness over time and/or between groups
+
+plottableData = cbind(df_meta, specnumber(df_numeric)) %>%
+  as_tibble() %>% 
+  left_join(rf) %>% 
+  mutate(richness=`specnumber(df_numeric)`)
+
+plottableData %>% ggplot(aes(x=as.factor(visit),y=richness,fill=as.factor(RFgroup))) + geom_boxplot()
+```
+
+```{r PCA of relative abundances}
+filterMask = (colSums(df_numeric == 0) / nrow(df_numeric)) <= 0.5
+df_num_filtered = df_numeric[,filterMask]
+relAbs = apply(df_num_filtered, 1, FUN=function(x){x / sum(x)}) %>% t() %>% as_tibble()
+rownames(relAbs) = paste0(df_meta$subject, "_", df_meta$visit)
+
+PCAmodel = prcomp(relAbs, rank=2, center=TRUE, scale=TRUE)
+fviz_eig(PCAmodel)
+
+fviz_pca_var(PCAmodel,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+cbind(df_meta, PCAmodel$x) %>% as_tibble() %>% ggplot(aes(x=PC1,y=PC2,col=as.factor(visit))) + geom_point()
+cbind(df_meta, PCAmodel$x) %>% as_tibble() %>% ggplot(aes(x=PC1,y=PC2,col=as.factor(subject))) + geom_point()
+cbind(df_meta, PCAmodel$x) %>% as_tibble() %>% left_join(rf) %>% ggplot(aes(x=PC1,y=PC2,col=as.factor(RFgroup))) + geom_point()
+
+PCAmodel$rotation %>% as_tibble() %>% mutate(asv=rownames(PCAmodel$rotation)) %>% left_join(taxa) %>% ggplot(aes(x=PC1,y=PC2,col=as.factor(Phylum))) + geom_point()
+PCAmodel$rotation %>% as_tibble() %>% mutate(asv=rownames(PCAmodel$rotation)) %>% left_join(taxa) %>% ggplot(aes(x=PC1,y=PC2,col=as.factor(Genus))) + geom_point()
+
+```
+```{r PCoA}
+# Bray-curtis
+d = vegdist(relAbs, method="bray")
+BC_pcoa = pcoa(d)
+
+plottableData = cbind(df_meta, BC_pcoa$vectors) %>% as_tibble() %>% left_join(rf)
+
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(subject))) + geom_point() + ggtitle("BC")
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(visit))) + geom_point() + ggtitle("BC")
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(RFgroup))) + geom_point() + ggtitle("BC")
+
+# Jensen-shannon
+d = philentropy::JSD(as.matrix(relAbs))
+JS_pcoa = pcoa(d)
+
+plottableData = cbind(df_meta, JS_pcoa$vectors) %>% as_tibble() %>% left_join(rf)
+
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(subject))) + geom_point() + ggtitle("JSD")
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(visit))) + geom_point() + ggtitle("JSD")
+plottableData %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(RFgroup))) + geom_point() + ggtitle("JSD")
+```
+```{r differential abundance analysis based on RFgroups}
+HOMD_mapping = read.csv("./TIFN/homd_result.csv") %>% as_tibble() %>% select(-X)
+
+df2 = df %>% left_join(rf) %>% filter(RFgroup != 1)
+df2_meta = df2 %>% select(sample, subject, visit, group, niche, RFgroup)
+df2_num = df2 %>% select(-sample,-subject,-visit,-group,-niche,-RFgroup)
+df2_num_filtered = df2_num[,filterMask]
+
+condition = df2_meta %>% select(RFgroup) %>% pull() %>% as.factor()
+dds <- DESeqDataSetFromMatrix(countData = t(df2_num_filtered),
+                              colData = DataFrame(condition),
+                              design = ~ condition)
+dds <- DESeq(dds)
+result = results(dds)
+
+result %>% as_tibble() %>% mutate(p = -log10(padj)) %>% ggplot(aes(x=log2FoldChange,y=p)) + geom_point() + ylab("-1*log10(padj)")
+
+annotated_result = cbind(colnames(df2_num_filtered), result) %>% as_tibble() %>% mutate(asv=colnames.df2_num_filtered.) %>% left_join(taxa) %>% left_join(HOMD_mapping) %>% filter(padj < 0.05) %>% select(-Kingdom,-Phylum,-Class,-Order,-Family,-representative_sequence,-colnames.df2_num_filtered.) %>% arrange(padj) %>% print(n=nrow(.))
+```
+
+```{r differential abundance analysis based on timepoints}
+timepointA = 2
+timepointB = 3
+HOMD_mapping = read.csv("./TIFN/homd_result.csv") %>% as_tibble() %>% select(-X)
+
+df2 = df %>% filter(visit %in% c(timepointA, timepointB))
+df2_meta = df2 %>% select(sample, subject, visit, group, niche)
+df2_num = df2 %>% select(-sample,-subject,-visit,-group,-niche)
+df2_num_filtered = df2_num[,filterMask]
+
+condition = df2_meta %>% select(visit) %>% pull() %>% as.factor()
+dds <- DESeqDataSetFromMatrix(countData = t(df2_num_filtered),
+                              colData = DataFrame(condition),
+                              design = ~ condition)
+dds <- DESeq(dds)
+result = results(dds)
+
+result %>% as_tibble() %>% mutate(p = -log10(padj)) %>% ggplot(aes(x=log2FoldChange,y=p)) + geom_point() + ylab("-1*log10(padj)")
+
+annotated_result = cbind(colnames(df2_num_filtered), result) %>% as_tibble() %>% mutate(asv=colnames.df2_num_filtered.) %>% left_join(taxa) %>% left_join(HOMD_mapping) %>% filter(padj < 0.05) %>% select(-Kingdom,-Phylum,-Class,-Order,-Family,-representative_sequence,-colnames.df2_num_filtered.) %>% arrange(padj) %>% print(n=nrow(.))
+```
+
+```{r analysis B}
+# A heatmap
+# Make heatmap using relative abundances
+library(Polychrome)
+source("./heatmap.2a.R")
+hclust.ward = function(x) hclust(x, method="ward.D")
+dist.pear = function(x) as.dist(1-cor(t(x)))
+
+# Classical result
+diffAbs = cbind(df_meta, relAbs %>% select(all_of(annotated_result$asv))) %>% as_tibble() %>% left_join(rf) %>% filter(RFgroup != 1)
+RFgroups = diffAbs$RFgroup
+diffAbs = diffAbs %>% select(-sample,-subject,-visit,-group,-niche,-RFgroup)
+
+P50 = createPalette(50,  c("#ff0000", "#00ff00", "#0000ff")) # red=0, green=1, blue=2
+rowCols = P50[RFgroups+1]
+heatmap.2a(as.matrix(diffAbs), distfun=dist.pear, hclustfun=hclust.ward, scale="row", trace="none", RowSideColors=rowCols)
+
+# PARAFAC result
+pfacSelection = paste0("ASV", c(5,7,9,17,20,22,50,52,61,72,74,79,90,92,96,99,114,117,118,153,170,180))
+relAbs2 = df_numeric %>% select(all_of(pfacSelection))
+diffAbs = apply(relAbs2, 1, FUN=function(x){x/sum(x)}) %>% t() %>% as_tibble()
+diffAbs = cbind(df_meta, diffAbs) %>% as_tibble() %>% left_join(rf) %>% filter(RFgroup != 1)
+RFgroups = diffAbs$RFgroup
+diffAbs = diffAbs %>% select(-sample,-subject,-visit,-group,-niche,-RFgroup)
+
+diffAbs = diffAbs[-67,]
+RFgroups = RFgroups[-67]
+P50 = createPalette(50,  c("#ff0000", "#00ff00", "#0000ff")) # red=0, green=1, blue=2
+rowCols = P50[RFgroups+1]
+heatmap.2a(as.matrix(diffAbs), distfun=dist.pear, hclustfun=hclust.ward, scale="row", trace="none", RowSideColors=rowCols)
+```
+
+```{r analysis C}
+# Cumulative bar plot of every timepoint or something
+```
+
+
+
+
+

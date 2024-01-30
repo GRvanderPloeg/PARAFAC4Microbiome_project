@@ -1,0 +1,48 @@
+metadata_version: 1
+name: Context-aware dimensionality reduction deconvolutes gut microbial community dynamics
+description: The benchmarking and analyses for the manuscript accompanying the CTF manuscript.
+tags:
+- bioinformatics
+- metagenomics
+- microbial-ecology
+- compositional
+- time
+authors:
+- name: Cameron Martino*
+  affiliations:
+  - name: University of California, San Diego
+- name: ' Liat Shenhav*'
+  affiliations:
+  - name: University of California, Los Angeles
+- name: Clarisse Marotz
+  affiliations:
+  - name: University of California, San Diego
+- name: ' George Armstrong'
+  affiliations:
+  - name: University of California, San Diego
+- name: Daniel McDonald
+  affiliations:
+  - name: University of California, San Diego
+- name: Yoshiki Vázquez-Baeza
+  affiliations:
+  - name: University of California, San Diego
+- name: ' James T. Morton'
+  affiliations:
+  - name: Flatiron Institute
+- name: ' Lingjing Jiang'
+  affiliations:
+  - name: University of California, San Diego
+- name: Maria Gloria Dominguez-Bello
+  affiliations:
+  - name: Rutgers University
+- name: Austin D. Swafford
+  affiliations:
+  - name: University of California, San Diego
+- name: Eran Halperin
+  affiliations:
+  - name: University of California, Los Angeles
+- name: Rob Knight
+  affiliations:
+  - name: University of California, San Diego
+corresponding_contributor:
+  name: Rob Knight
