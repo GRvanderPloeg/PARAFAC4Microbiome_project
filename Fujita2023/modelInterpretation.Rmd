@@ -1,0 +1,279 @@
+---
+title: "ModelInterpretation"
+author: "G.R. van der Ploeg"
+date: "9/29/2023"
+output: html_document
+---
+
+```{r libraries}
+library(ggplot2)
+library(tidyverse)
+library(ggrepel)
+library(ggpubr)
+library(paramGUI)
+library(pracma)
+library(plotly)
+library(cowplot)
+
+source("./summary.functions.R")
+source("./PARAFAC_functions.R")
+source("../../N-way-shell-R/heatmap.2a.R")
+source("../../N-way-shell-R/plotfunctions.R")
+set.seed(0)
+```
+
+```{r import model}
+featureNames = c("asv", "Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species", "identified")
+dayVector = 1:110
+
+SA_model = importPARAFAC("./20230928_onlySA/PARAFAC models/SoH_microbiome", featureNames, dayVector, "asv", 2)
+SB_model = importPARAFAC("./20230928_onlySB/PARAFAC models/SoH_microbiome", featureNames, dayVector, "asv", 3)
+SC_model = importPARAFAC("./20230928_onlySC/PARAFAC models/SoH_microbiome", featureNames, dayVector, "asv", 2)
+
+WA_model = importPARAFAC("./20230928_onlyWA/PARAFAC models/SoH_microbiome", featureNames, dayVector, "asv", 2)
+WB_model = importPARAFAC("./20230928_onlyWB/PARAFAC models/SoH_microbiome", featureNames, dayVector, "asv", 3)
+WC_model = importPARAFAC("./20230928_onlyWC/PARAFAC models/SoH_microbiome", featureNames, dayVector, "asv", 3)
+```
+
+```{r import raw data}
+raw_df = read.csv("./Data/16S_data.csv") %>% as_tibble()
+sampleInfo = read.csv("./Data/sampleInfo.csv") %>% as_tibble()
+taxonomy = read.csv("./Data/taxonomy.csv") %>% as_tibble()
+
+totalSums = rowSums(raw_df, na.rm=TRUE)
+relAbs = sweep(raw_df, 1, totalSums, FUN="/")
+```
+
+```{r specify phylum colors}
+library(RColorBrewer)
+n = 15
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+phylumColors = setNames(col_vector[1:n], levels(as.factor(taxonomy$Phylum)))
+```
+
+```{r plot models}
+colourCols = c("", "Genus", "")
+legendTitles = c("", "Genus", "")
+xLabels = c("Replicate", "Feature index", "Time point")
+legendColNums = c(0,5,0)
+arrangeModes = c(FALSE, TRUE, FALSE)
+continuousModes = c(FALSE,FALSE,TRUE)
+overallTitle = ""
+
+plotPARAFACModel(SA_model, colourCols, legendTitles, xLabels, legendColNums, arrangeModes, continuousModes, overallTitle)
+plotPARAFACModel(SB_model, colourCols, legendTitles, xLabels, legendColNums, arrangeModes, continuousModes, overallTitle)
+plotPARAFACModel(SC_model, colourCols, legendTitles, xLabels, legendColNums, arrangeModes, continuousModes, overallTitle)
+plotPARAFACModel(WA_model, colourCols, legendTitles, xLabels, legendColNums, arrangeModes, continuousModes, overallTitle)
+plotPARAFACModel(WB_model, colourCols, legendTitles, xLabels, legendColNums, arrangeModes, continuousModes, overallTitle)
+plotPARAFACModel(WC_model, colourCols, legendTitles, xLabels, legendColNums, arrangeModes, continuousModes, overallTitle)
+```
+
+```{r rel abs plot}
+relAbs %>% mutate(treatment = sampleInfo$treat2, replicate = sampleInfo$replicate.id, time= sampleInfo$time) %>% filter(treatment == "SA") %>% select(-treatment) %>% pivot_longer(-c(replicate,time)) %>% mutate(ID=name) %>% left_join(taxonomy) %>% ggplot(aes(x=as.factor(time),y=value,fill=as.factor(Phylum))) + facet_grid(vars(replicate)) + geom_bar(stat="identity") + scale_fill_manual(values=phylumColors) + theme(axis.text.x = element_text(angle=90,vjust=0.5,hjust=1), legend.position="bottom")
+
+relAbs %>% mutate(treatment = sampleInfo$treat2, replicate = sampleInfo$replicate.id, time= sampleInfo$time) %>% filter(treatment == "SB") %>% select(-treatment) %>% pivot_longer(-c(replicate,time)) %>% mutate(ID=name) %>% left_join(taxonomy) %>% ggplot(aes(x=as.factor(time),y=value,fill=as.factor(Phylum))) + facet_grid(vars(replicate)) + geom_bar(stat="identity") + scale_fill_manual(values=phylumColors) + theme(axis.text.x = element_text(angle=90,vjust=0.5,hjust=1), legend.position="bottom")
+
+relAbs %>% mutate(treatment = sampleInfo$treat2, replicate = sampleInfo$replicate.id, time= sampleInfo$time) %>% filter(treatment == "SC") %>% select(-treatment) %>% pivot_longer(-c(replicate,time)) %>% mutate(ID=name) %>% left_join(taxonomy) %>% ggplot(aes(x=as.factor(time),y=value,fill=as.factor(Phylum))) + facet_grid(vars(replicate)) + geom_bar(stat="identity") + scale_fill_manual(values=phylumColors) + theme(axis.text.x = element_text(angle=90,vjust=0.5,hjust=1), legend.position="bottom")
+
+relAbs %>% mutate(treatment = sampleInfo$treat2, replicate = sampleInfo$replicate.id, time= sampleInfo$time) %>% filter(treatment == "WA") %>% select(-treatment) %>% pivot_longer(-c(replicate,time)) %>% mutate(ID=name) %>% left_join(taxonomy) %>% ggplot(aes(x=as.factor(time),y=value,fill=as.factor(Phylum))) + facet_grid(vars(replicate)) + geom_bar(stat="identity") + scale_fill_manual(values=phylumColors) + theme(axis.text.x = element_text(angle=90,vjust=0.5,hjust=1), legend.position="bottom")
+
+relAbs %>% mutate(treatment = sampleInfo$treat2, replicate = sampleInfo$replicate.id, time= sampleInfo$time) %>% filter(treatment == "WB") %>% select(-treatment) %>% pivot_longer(-c(replicate,time)) %>% mutate(ID=name) %>% left_join(taxonomy) %>% ggplot(aes(x=as.factor(time),y=value,fill=as.factor(Phylum))) + facet_grid(vars(replicate)) + geom_bar(stat="identity") + scale_fill_manual(values=phylumColors) + theme(axis.text.x = element_text(angle=90,vjust=0.5,hjust=1), legend.position="bottom")
+
+relAbs %>% mutate(treatment = sampleInfo$treat2, replicate = sampleInfo$replicate.id, time= sampleInfo$time) %>% filter(treatment == "WC") %>% select(-treatment) %>% pivot_longer(-c(replicate,time)) %>% mutate(ID=name) %>% left_join(taxonomy) %>% filter(value>0) %>% ggplot(aes(x=as.factor(time),y=value,fill=as.factor(Genus))) + facet_grid(vars(replicate)) + geom_bar(stat="identity", col="black") + labs(fill="Genus") + theme(legend.position="bottom", axis.text.x=element_text(angle=90,vjust=0.5,hjust=1)) + xlab("Time point") + ylab("Relative abundance")
+
+```
+
+```{r plotting main result}
+selection = WC_model[[2]] %>% filter(Component_1 > 0.1) %>% select(asv) %>% pull()
+relAbs %>% mutate(treatment = sampleInfo$treat2, replicate = sampleInfo$replicate.id, time= sampleInfo$time) %>% filter(treatment == "WC") %>% select(-treatment) %>% pivot_longer(-c(replicate,time)) %>% filter(name %in% selection) %>% group_by(replicate,time) %>% summarize(s=sum(value)) %>% ggplot(aes(x=time,y=s,col=as.factor(replicate))) + geom_line() + xlab("Time") + ylab("Sum of relative abundance") + scale_color_discrete(name="Replicate") + ylim(0,1)
+
+selection = WC_model[[2]] %>% filter(Component_2 > 0.3) %>% select(asv) %>% pull()
+relAbs %>% mutate(treatment = sampleInfo$treat2, replicate = sampleInfo$replicate.id, time= sampleInfo$time) %>% filter(treatment == "WC") %>% select(-treatment) %>% pivot_longer(-c(replicate,time)) %>% filter(name %in% selection) %>% group_by(replicate,time) %>% summarize(s=sum(value)) %>% ggplot(aes(x=time,y=s,col=as.factor(replicate))) + geom_line() + xlab("Time") + ylab("Sum of relative abundance") + scale_color_discrete(name="Replicate") + ylim(0,1)
+
+selection = WC_model[[2]] %>% filter(Component_3 > 0) %>% select(asv) %>% pull()
+relAbs %>% mutate(treatment = sampleInfo$treat2, replicate = sampleInfo$replicate.id, time= sampleInfo$time) %>% filter(treatment == "WC") %>% select(-treatment) %>% pivot_longer(-c(replicate,time)) %>% filter(name %in% selection) %>% group_by(replicate,time) %>% summarize(s=sum(value)) %>% ggplot(aes(x=time,y=s,col=as.factor(replicate))) + geom_line() + xlab("Time") + ylab("Sum of relative abundance") + scale_color_discrete(name="Replicate") + ylim(0,1)
+
+
+```
+
+```{r check specific microbiota}
+featureOrdering = WC_model[[2]] %>% arrange(Phylum) %>% mutate(index=1:nrow(.)) %>% select(asv,index)
+
+relAbs %>% mutate(treatment = sampleInfo$treat2, replicate = sampleInfo$replicate.id, time= sampleInfo$time) %>% filter(treatment == "WC", replicate==4) %>% select(-treatment,-replicate) %>% pivot_longer(-time) %>% filter(name %in% WC_model[[2]]$asv) %>% mutate(ID=name) %>% left_join(taxonomy) %>% mutate(asv=ID) %>% left_join(featureOrdering) %>% ggplot(aes(x=time,y=value)) + facet_grid(vars(index)) + geom_line()
+
+raw_df %>% mutate(treatment = sampleInfo$treat2, replicate = sampleInfo$replicate.id, time= sampleInfo$time) %>% filter(treatment == "WC", replicate==3) %>% select(-treatment,-replicate) %>% pivot_longer(-time) %>% filter(name %in% WC_model[[2]]$asv) %>% mutate(ID=name) %>% left_join(taxonomy) %>% mutate(asv=ID) %>% left_join(featureOrdering) %>% ggplot(aes(x=time,y=value)) + facet_grid(vars(index)) + geom_line() + scale_y_log10()
+```
+
+```{r another approach}
+heatmapWithLoadingsPlot = function(model, subjectNumber, numComponent){
+  loadingCol = sym(paste0("Component_", numComponent))
+  numSubjects = nrow(model[[1]])
+  numFeatures = nrow(model[[2]])
+  numTimepoints = nrow(model[[3]])
+  
+  featureOrdering = model[[2]] %>% arrange(desc(Phylum)) %>% mutate(index=1:nrow(.)) %>% select(asv,index)
+  
+  timeLoadingsPlot = model[[3]] %>%
+    ggplot(aes(x=day,y=!!loadingCol)) + 
+    geom_path() + 
+    scale_x_continuous(expand=c(0,0)) + 
+    theme(axis.text.x = element_blank()) +
+    xlab("") +
+    ylab("Component 1 loading")
+  
+  hmap = model[[7]] %>% 
+    mutate(subject=rep(model[[1]]$subject,each=numTimepoints), time=rep(1:numTimepoints,numSubjects)) %>%
+    filter(subject==subjectNumber) %>% 
+    select(-subject) %>% 
+    pivot_longer(-time) %>% 
+    mutate(asv=name) %>% 
+    left_join(featureOrdering) %>% 
+    select(-name) %>% 
+    ggplot(aes(y=index,x=time,fill=value)) + 
+    geom_tile() + 
+    scale_y_continuous(expand=c(0,0)) + 
+    scale_x_continuous(expand=c(0,0)) + 
+    theme(legend.position="none",
+          axis.text.y = element_text("")) + 
+    ylab("") +
+    xlab("Day")
+  
+  bWithLegend = model[[7]] %>%
+    mutate(subject=rep(model[[1]]$subject,each=numTimepoints), time=rep(1:numTimepoints,numSubjects)) %>%
+    filter(subject==subjectNumber) %>% 
+    select(-subject) %>% 
+    pivot_longer(-time) %>% 
+    mutate(asv=name) %>% 
+    left_join(featureOrdering) %>% 
+    select(-name) %>% 
+    ggplot(aes(x=index,y=time,fill=value)) + 
+    geom_tile()
+  l = get_legend(bWithLegend)
+  
+  featureLoadingsPlot = model[[2]] %>% 
+    left_join(featureOrdering) %>% 
+    ggplot(aes(y=as.factor(index),x=!!loadingCol,fill=as.factor(Phylum))) +
+    geom_bar(stat="identity",col="black",just=0.5) + 
+    scale_fill_discrete(name="Phylum") + 
+    theme(legend.position="left",
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank()) + 
+    scale_y_discrete(expand=c(0,0)) +
+    ylab("Feature index") + 
+    xlab("Component 1 loading")
+  
+  plot_grid(l, timeLoadingsPlot,featureLoadingsPlot, hmap, ncol=2, nrow=2, rel_widths=c(0.25,0.75), rel_heights=c(0.25,0.75))
+}
+
+heatmapWithLoadingsPlot(WC_model, 4, 1)
+```
+```{r another variant}
+fullModelPlotHeatmap(WC_model, 1)
+fullModelPlotHeatmap(WC_model, 2)
+fullModelPlotHeatmap(WC_model, 3)
+```
+
+```{r why the data processing is relevant}
+df_clr = read.csv("./WC_clr.csv", header=FALSE)
+df_cnt = read.csv("./WC_cnt.csv", header=FALSE)
+df_cnt_scl = read.csv("./WC_cnt_scl.csv", header=FALSE)
+featureOrdering = WC_model[[2]] %>% arrange(desc(Phylum)) %>% mutate(index=1:nrow(.)) %>% select(asv,index)
+
+quickFix = function(df, replicateNum){
+  colnames(df) = paste0(rep(WC_model[[2]]$asv,110),"_",rep(1:110,each=23))
+  df %>% 
+    as_tibble() %>% 
+    mutate(replicate=1:8) %>%
+    pivot_longer(-replicate) %>% 
+    mutate(time=as.numeric(str_split_fixed(name,"_",3)[,3])) %>%
+    mutate(asv=paste0(str_split_fixed(name,"_",3)[,1],"_",str_split_fixed(name,"_",3)[,2])) %>%
+    left_join(featureOrdering) %>% 
+    select(-name) %>% 
+    filter(replicate==replicateNum) %>% 
+    select(-replicate) %>%
+    ggplot(aes(x=time,y=index,fill=value)) + 
+    geom_tile() +
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          axis.title.y=element_blank(),
+          plot.margin=unit(c(0,0,0,0),"cm")) +
+    scale_x_continuous(expand=c(0,0)) +
+    ylab("")
+}
+
+# Raw heatmap
+plotlistRaw = list()
+for(i in 1:8){
+  plotlistRaw[[i]] = raw_df %>%
+    mutate(treatment = sampleInfo$treat2, replicate=sampleInfo$replicate.id, time=sampleInfo$time) %>%
+    filter(treatment == "WC", replicate == i) %>%
+    select(-treatment,-replicate) %>%
+    pivot_longer(-time) %>%
+    filter(name %in% WC_model[[2]]$asv) %>%
+    mutate(asv=name) %>% 
+    select(-name) %>% 
+    left_join(featureOrdering) %>% 
+    ggplot(aes(x=time,y=index,fill=value)) +
+    geom_tile() +
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          axis.title.y=element_blank(),
+          plot.margin=unit(c(0,0,0,0),"cm")) +
+    scale_x_continuous(expand=c(0,0)) +
+    ylab("")
+}
+ggarrange(plotlist=plotlistRaw, ncol=8, common.legend=TRUE)
+
+# After CLR
+plotlistCLR = list()
+colnames(df_clr) = WC_model[[2]]$asv
+for(i in 1:8){
+  plotlistCLR[[i]] = df_clr %>%
+    mutate(replicate=sampleInfo %>% filter(treat2=="WC") %>% select(replicate.id) %>% pull(),
+           time=sampleInfo %>% filter(treat2=="WC") %>% select(time) %>% pull()) %>% 
+    filter(replicate==i) %>%
+    select(-replicate) %>%
+    pivot_longer(-time) %>%
+    mutate(asv=name) %>% 
+    select(-name) %>%
+    left_join(featureOrdering) %>%
+    ggplot(aes(x=time,y=index,fill=value)) +
+    geom_tile() +
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          axis.title.y=element_blank(),
+          plot.margin=unit(c(0,0,0,0),"cm")) +
+    scale_x_continuous(expand=c(0,0)) +
+    ylab("")
+}
+ggarrange(plotlist=plotlistCLR, ncol=8, common.legend=TRUE)
+
+# Centered heatmap
+plotlistCNT = list()
+for(i in 1:8){
+  plotlistCNT[[i]] = quickFix(df_cnt,i)
+}
+ggarrange(plotlist=plotlistCNT, ncol=8, common.legend=TRUE)
+
+# Scaled heatmap
+plotlistSCL = list()
+for(i in 1:8){
+  plotlistSCL[[i]] = quickFix(df_cnt_scl,i)
+}
+ggarrange(plotlist=plotlistSCL, ncol=8, common.legend=TRUE)
+
+# Final result
+heatmapWithLoadingsPlot(WC_model, 4, 1)
+
+```
+
+```{r residual plot}
+res = (WC_model[[5]] - WC_model[[4]]) %>% as_tibble()
+plotlist = list()
+
+for(i in 1:8){
+  plotlist[[i]] = quickFix(res,i)
+}
+ggarrange(plotlist=plotlist, ncol=8, common.legend=TRUE)
+```
