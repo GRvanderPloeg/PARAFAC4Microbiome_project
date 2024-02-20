@@ -1,0 +1,186 @@
+---
+title: "MockData"
+author: "G.R. van der Ploeg"
+date: "2/20/2023"
+output: html_document
+---
+
+```{r libraries}
+library(ggplot2)
+library(tidyverse)
+library(ggrepel)
+library(ggpubr)
+library(paramGUI)
+library(pracma)
+library(plotly)
+library(cowplot)
+library(multiblock)
+
+source("../../N-way-shell-R/summary.functions.R")
+source("../../N-way-shell-R/PARAFAC_functions.R")
+source("../../N-way-shell-R/heatmap.2a.R")
+source("../../N-way-shell-R/plotfunctions.R")
+source("../Roel_sim_functions.R")
+set.seed(0)
+```
+
+```{r set cube size}
+I = 100
+J = 3
+K = 10
+```
+
+```{r create scores}
+
+partA = abs(rnorm(I/2, mean=0.02, sd=0.001))
+partB = rnorm(I/2, mean=0.2, sd=0.01)
+#partB = seq(0.06, 0.12, length.out=I/2) + abs(rnorm(I/2, mean=0, sd=0.001))
+#partC = seq(0.08, 0.12, length.out=I/2) + abs(rnorm(I/2, mean=0, sd=0.001))
+
+# Component 1
+t1 = c(partB, -partB)
+
+# Component 2
+t2 = c(-partB, partB)
+
+t1 %>% as_tibble() %>% mutate(index=1:nrow(.),phenotype=c(rep(1,I/2),rep(2,I/2))) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity")
+t2 %>% as_tibble() %>% mutate(index=1:nrow(.),phenotype=c(rep(1,I/2),rep(2,I/2))) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity")
+```
+
+```{r create loadings}
+#p1 = createBinaryLoading(nonzeroIndices=10, length=J)
+#p2 = createBinaryLoading(nonzeroIndices=20, length=J)
+
+p1 = c(-0.05, 0.05, 0.8)
+p1 = p1 / norm(as.matrix(p1),"2")
+
+p2 = c(0.8, -0.05, 0.05)
+p2 = p2 / norm(as.matrix(p2),"2")
+
+p1 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_bar(stat="identity")
+p2 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_bar(stat="identity")
+```
+
+```{r create time profiles}
+k1 = (1:10)^3 #2^(1:10) #exp(1:10)
+k1 = k1 / norm(as.matrix(k1), "2")
+k2 = sigmoid(-5:5) / norm(sigmoid(-5:5),"2") + 0.5
+
+k1 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_line()
+k2 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_line()
+```
+
+```{r create the dataset}
+signalToNoiseRatio = 0
+
+pattern1 = t1 %*% t(p1)
+pattern2 = t2 %*% t(p2)
+
+X = array(0L, dim=c(I, J, K))
+
+for(k in 1:K){
+  X[,,k] = pattern1*k1[k] + pattern2*k2[k]
+}
+
+# Add error
+#X = X / sqrt(sum(X^2)) # scales to ssq 1
+
+#E = array(abs(rnorm(I*J*K)), dim=c(I,J,K))
+##E = E / sqrt(sum(E^2)) * signalToNoiseRatio
+#X = X + E
+
+# Center across subject mode
+X_cnt = X
+for(i in 1:I){
+  for(k in 1:K){
+    X_cnt[i,,k] = X[i,,k] - mean(X[i,,k])
+  }
+}
+
+# Scale within feature mode
+X_cnt_scl = X_cnt
+for(i in 1:I){
+  X_cnt_scl[i,,] = X_cnt[i,,] / sd(X_cnt[i,,])
+}
+
+```
+
+```{r plot per phylum}
+# Convert to flat array
+flat = matrix(0L, nrow=I*K, ncol=J)
+
+iterator = 1
+for(i in 1:I){
+  for(k in 1:K){
+    flat[iterator,] = X[i,,k]
+    iterator = iterator + 1
+  }
+}
+
+flat %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% ggplot(aes(x=as.factor(timepoint),y=value,col=as.factor(subject),group=subject)) + facet_wrap(vars(name)) + geom_line()
+```
+```{r phenotype plot}
+design = cbind(1:I, c(rep(1,I/2), rep(2,I/2))) %>% as_tibble()
+colnames(design) = c("subject", "phenotype")
+
+fakeCounts = flat * 1000
+fakeCounts[1:500,1] = fakeCounts[1:500,1] + 200
+fakeCounts[501:1000,1] = fakeCounts[501:1000,1] - 50
+fakeCounts[,2] = fakeCounts[,2] + 150
+fakeCounts[1:500,3] = fakeCounts[1:500,3] + 50
+fakeCounts[501:1000,3] = fakeCounts[501:1000,3] + 150
+
+flat %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(design) %>% group_by(phenotype,timepoint,name) %>% summarise(m=mean(value),s=sd(value)) %>% ggplot(aes(x=as.factor(timepoint),y=m,col=as.factor(name))) + facet_wrap(vars(phenotype)) + geom_point() + geom_errorbar(aes(ymin=m-s,ymax=m+s))
+
+fakeCounts %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(design) %>% group_by(phenotype,timepoint,name) %>% summarise(m=mean(value),s=sd(value)) %>% ggplot(aes(x=as.factor(timepoint),y=m,col=as.factor(name))) + facet_wrap(vars(phenotype)) + geom_point() + geom_errorbar(aes(ymin=m-s,ymax=m+s))
+```
+
+```{r rel abs plot}
+
+relAbs = sweep(fakeCounts, 1, rowSums(fakeCounts), FUN="/")
+
+relAbs %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% filter(subject %in% c(1,51)) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(name))) + facet_wrap(vars(subject), nrow=I) + geom_bar(stat="identity", col="black")
+```
+
+```{r check the model}
+library(multiway)
+model = parafac(X, 2, nstart=100)
+
+# The model
+empty = ggplot() + theme_void()
+a=model$A %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V1)) + geom_bar(stat="identity")
+b=model$A %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V2)) + geom_bar(stat="identity")
+c=model$B %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V1)) + geom_bar(stat="identity")
+d=model$B %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V2)) + geom_bar(stat="identity")
+e=model$C %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V1)) + geom_bar(stat="identity")
+f=model$C %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V2)) + geom_bar(stat="identity")
+ggarrange(a,b,c,d,e,f)
+
+# Real
+g=t1 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_bar(stat="identity")
+j=t2 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_bar(stat="identity")
+h=p1 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_bar(stat="identity")
+k=p2 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_bar(stat="identity")
+i=k1 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_bar(stat="identity")
+l=k2 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_bar(stat="identity")
+ggarrange(g,h,i,j,k,l)
+
+```
+
+```{r pca}
+library(vegan)
+library(ape)
+
+d = vegdist(fakeCounts+275, method="bray")
+d2 = vegdist(fakeCounts+275, method="aitchison")
+BC_pcoa = pcoa(d)
+A_pcoa = pcoa(d2)
+
+a=BC_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% left_join(design) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(phenotype))) + geom_point()
+b=BC_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point()
+ggarrange(a,b)
+
+c=A_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% left_join(design) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(phenotype))) + geom_point()
+d=A_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point()
+ggarrange(c,d)
+```
