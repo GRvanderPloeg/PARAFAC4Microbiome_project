@@ -1,7 +1,0 @@
-"0","microbiome.raw = read.csv(""./TIFN/count-table.tsv"", sep=""\t"")"
-"0","taxa = read.csv(""./TIFN/taxonomic-classification.tsv"", sep=""\t"")"
-"0","selectedIndividuals = microbiome.raw %>% as_tibble() %>% filter(group == ""control"") %>% select(subject) %>% pull %>% unique"
-"0",""
-"0","df = microbiome.raw %>% as_tibble() %>% filter(group == ""control"", niche == ""lower jaw, lingual"")"
-"0","df_meta = df[,1:5]"
-"0","df_numeric = df[,6:ncol(df)]"
