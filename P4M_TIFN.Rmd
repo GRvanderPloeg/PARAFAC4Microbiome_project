@@ -1,0 +1,357 @@
+---
+title: "P4M_TIFN"
+output: html_document
+date: "2024-01-30"
+---
+
+## Requirements
+```{r libraries, include=FALSE}
+#library(ggplot2)
+library(ggpubr)
+#library(compositions)
+#library(viridis)
+#library(dplyr)
+#library(tidyr)
+#library(hrbrthemes)
+#library(extrafont)
+#library(showtext)
+#library(vegan)
+#library(RColorBrewer)
+#library(Polychrome)
+#library(multiway)
+#library(MatrixCorrelation)
+#library(stringr)
+#library(asbio)
+#library(stringr)
+#library(pathview)
+#library(gplots)
+library(tidyverse)
+library(ggrepel)
+library(paramGUI)
+library(pracma)
+
+source("../../N-way-shell-R/summary.functions.R")
+source("../../N-way-shell-R/PARAFAC_functions.R")
+source("../../N-way-shell-R/plotFunctions.R")
+source("../../N-way-shell-R/heatmap.2a.R")
+set.seed(0)
+```
+
+```{r Import red fluorescence data}
+rf_data = read.csv("./Homogenized data analysis/0. Raw data input/RFdata.csv")
+colnames(rf_data) = c("subject", "id", "fotonr", "day", "group", "RFgroup", "MQH", "SPS(tm)", "Area_delta_R30", "Area_delta_Rmax", "Area_delta_R30_x_Rmax", "gingiva_mean_R_over_G", "gingiva_mean_R_over_G_upper_jaw", "gingiva_mean_R_over_G_lower_jaw")
+rf_data = rf_data %>% as_tibble()
+
+rf_data[rf_data$subject == "VSTPHZ", 1] = "VSTPH2"
+rf_data[rf_data$subject == "D2VZH0", 1] = "DZVZH0"
+rf_data[rf_data$subject == "DLODNN", 1] = "DLODDN"
+rf_data[rf_data$subject == "O3VQFX", 1] = "O3VQFQ"
+rf_data[rf_data$subject == "F80LGT", 1] = "F80LGF"
+rf_data[rf_data$subject == "26QQR0", 1] = "26QQrO"
+
+rf_data2 = read.csv("./Homogenized data analysis/0. Raw data input/red_fluorescence_data.csv") %>% as_tibble()
+rf_data2 = rf_data2[,c(2,4,181:192)]
+rf_data = rf_data %>% left_join(rf_data2)
+
+rf = rf_data %>% select(subject, RFgroup) %>% unique()
+```
+
+```{r Import subject metadata}
+age_gender = read.csv("./Homogenized data analysis/0. Raw data input/20160210 demografische gegevens TIFN2.csv", sep=";")
+age_gender = age_gender[2:nrow(age_gender),2:ncol(age_gender)]
+age_gender = age_gender %>% as_tibble() %>% filter(onderzoeksgroep == 0) %>% select(naam, leeftijd, geslacht)
+colnames(age_gender) = c("subject", "age", "gender")
+
+# Correction for incorrect subject ids
+age_gender[age_gender$subject == "VSTPHZ", 1] = "VSTPH2"
+age_gender[age_gender$subject == "D2VZH0", 1] = "DZVZH0"
+age_gender[age_gender$subject == "DLODNN", 1] = "DLODDN"
+age_gender[age_gender$subject == "O3VQFX", 1] = "O3VQFQ"
+age_gender[age_gender$subject == "F80LGT", 1] = "F80LGF"
+age_gender[age_gender$subject == "26QQR0", 1] = "26QQrO"
+
+age_gender = age_gender %>% arrange(subject)
+```
+
+```{r Import microbiome data}
+microbiome.raw = read.csv("./Homogenized data analysis/0. Raw data input/20221005_wp2/count-table.tsv", sep="\t")
+taxa = read.csv("./Homogenized data analysis/0. Raw data input/20221005_wp2/taxonomic-classification.tsv", sep="\t")
+selectedIndividuals = microbiome.raw %>% as_tibble() %>% filter(group == "control") %>% select(subject) %>% pull %>% unique
+
+countData = microbiome.raw %>% as_tibble() %>% filter(niche == "upper jaw, lingual", group == "control")
+countData.numeric = countData %>% select(-sample,-subject,-visit,-group,-niche)
+relAbs = sweep(countData.numeric, 1, rowSums(countData.numeric), FUN="/")
+timepoints = c(-14,0,2,5,9,14,21)
+
+# Low responders
+resultLow = matrix(0, nrow=7, ncol=14015)
+for(i in 1:7){
+  mb.numeric1 = countData %>% left_join(rf) %>% filter(RFgroup==0, visit==i) %>% select(-sample,-group,-niche,-subject,-visit)
+  df1 = apply(mb.numeric1, 2, median)
+  relAbs1 = df1 / sum(df1)
+  mb.numeric1 = countData %>% left_join(rf) %>% filter(RFgroup==0, visit==i) %>% select(-sample,-group,-niche,-subject,-visit)
+  df1 = apply(mb.numeric1, 2, median)
+  df1 = df1 / sum(df1)
+  resultLow[i,] = df1
+}
+resultLow = resultLow %>% as_tibble()
+colnames(resultLow) = colnames(mb.numeric1)
+resultLow = resultLow %>% mutate(RFgroup = "Low", visit=timepoints)
+
+# Mid
+resultMid = matrix(0, nrow=7, ncol=14015)
+for(i in 1:7){
+  mb.numeric1 = countData %>% left_join(rf) %>% filter(RFgroup==1, visit==i) %>% select(-sample,-group,-niche,-subject,-visit)
+  df1 = apply(mb.numeric1, 2, median)
+  relAbs1 = df1 / sum(df1)
+  mb.numeric1 = countData %>% left_join(rf) %>% filter(RFgroup==1, visit==i) %>% select(-sample,-group,-niche,-subject,-visit)
+  df1 = apply(mb.numeric1, 2, median)
+  df1 = df1 / sum(df1)
+  resultMid[i,] = df1
+}
+resultMid = resultMid %>% as_tibble()
+colnames(resultMid) = colnames(mb.numeric1)
+resultMid = resultMid %>% mutate(RFgroup = "Mid", visit=timepoints)
+
+# High
+resultHigh = matrix(0, nrow=7, ncol=14015)
+for(i in 1:7){
+  mb.numeric1 = countData %>% left_join(rf) %>% filter(RFgroup==2, visit==i) %>% select(-sample,-group,-niche,-subject,-visit)
+  df1 = apply(mb.numeric1, 2, median)
+  relAbs1 = df1 / sum(df1)
+  mb.numeric1 = countData %>% left_join(rf) %>% filter(RFgroup==2, visit==i) %>% select(-sample,-group,-niche,-subject,-visit)
+  df1 = apply(mb.numeric1, 2, median)
+  df1 = df1 / sum(df1)
+  resultHigh[i,] = df1
+}
+resultHigh = resultHigh %>% as_tibble()
+colnames(resultHigh) = colnames(mb.numeric1)
+resultHigh = resultHigh %>% mutate(RFgroup = "High", visit=timepoints)
+
+relAbsPlotData = rbind(resultLow, resultMid, resultHigh)
+```
+
+```{r import model}
+path = "./Homogenized data analysis/5. Microbiome modeling/20230605_run/PARAFAC models/Up_ling"
+mode1ColNames = c("subject")
+mode2ColNames = c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species", "representative_sequence", "asv")
+mode3ColNames = c("timepoint")
+subjectIDs = "subject"
+featureIDs = "asv"
+numComponents = 2
+
+model = importPARAFAC(path, mode1ColNames, mode2ColNames, mode3ColNames, subjectIDs, featureIDs, numComponents)
+model[[1]] = model[[1]] %>% left_join(rf)
+model[[3]] = model[[3]] %>% mutate(visit = 1:nrow(.))
+
+# Prep
+subjectMode = correctPARAFACloadings(model, 1)
+colnames(subjectMode) = c("Component_1", "Component_2")
+subjectMode = subjectMode %>% as_tibble() %>% mutate(RFgroup = model[[1]]$RFgroup)
+
+featureMode = correctPARAFACloadings(model, 2)
+colnames(featureMode) = c("Component_1", "Component_2")
+featureMode = featureMode %>% as_tibble() %>% mutate(asv = model[[2]]$asv) %>% left_join(taxa)
+
+timeMode = correctPARAFACloadings(model,3)
+colnames(timeMode) = c("Component_1", "Component_2")
+timeMode = timeMode %>% as_tibble() %>% mutate(timepoint = timepoints)
+```
+
+
+
+# Clustering
+```{r calculating all the variance explained - subjects}
+varexp_subjects = function(model){
+  varExps = apply(model[[4]]^2, 1, function(x){sum(x, na.rm=TRUE)}) / apply(model[[5]]^2, 1,  function(x){sum(x, na.rm=TRUE)})
+  result = cbind(model[[1]]$subject, varExps) %>% as_tibble()
+  result$varExps = as.numeric(result$varExps)
+  colnames(result) = c("subject", "varExps")
+  return(result)
+}
+
+varexp_features = function(model, featureNameColumnName){
+  varExps = apply(model[[6]]^2, 2, function(x){sum(x, na.rm=TRUE)}) / apply(model[[7]]^2, 2, function(x){sum(x, na.rm=TRUE)})
+  result = cbind(model[[2]][featureNameColumnName] %>% pull(), varExps) %>% as_tibble()
+  result$varExps = as.numeric(result$varExps)
+  colnames(result) = c(featureNameColumnName, "varExps")
+  return(result)
+}
+
+loadCongruences = function(path, nameVector){
+  df = read.csv(path, header=FALSE)
+  numComponents = ncol(df)
+  
+  colnames(df) = paste0("Congruence_", 1:numComponents)
+  row.names(df) = nameVector
+  return(df)
+}
+
+uplingSubjectVarExps = varexp_subjects(model)
+uplingFeatureVarExps = varexp_features(model, "asv")
+
+uplingSubjectCongruences = loadCongruences("./Homogenized data analysis/8. Mutually exclusive microbiomes/20230605_run/Up_ling_individual_congruence_loadings.csv", model[[1]]$subject)
+uplingFeatureCongruences = loadCongruences("./Homogenized data analysis/8. Mutually exclusive microbiomes/20230605_run/Up_ling_feature_congruence_loadings.csv", model[[2]]$asv)
+```
+
+## Filtering the features
+
+```{r filtering the feature mode based on varexp}
+filterFeatures = function(model, varExpMultiplier){
+  modelVarExp = sum(model[[6]]^2, na.rm=TRUE) / sum(model[[7]]^2, na.rm=TRUE)
+  wellModeledFeatures = apply(model[[6]]^2, 2, function(x){sum(x, na.rm=TRUE)}) / apply(model[[7]]^2, 2, function(x){sum(x, na.rm=TRUE)}) > (varExpMultiplier*modelVarExp)
+  result = cbind(colnames(model[[6]]), as.logical(as.numeric(wellModeledFeatures))) %>% as_tibble()
+  colnames(result) = c("featureName", "keep")
+  return(result)
+}
+
+filterByCongruence = function(congruenceOutput, labels, labelName, threshold=0.5){
+  numComponents = ncol(congruenceOutput)
+  
+  if(numComponents == 1){
+    keep1 = abs(congruenceOutput[,1]) > threshold
+    keep2 = FALSE
+  }
+  else{
+    keep1 = abs(congruenceOutput[,1]) > threshold
+    keep2 = abs(congruenceOutput[,2]) > threshold
+  }
+  
+  result = labels %>% as_tibble() %>% mutate(keep = (keep1 | keep2))
+  colnames(result) = c(labelName, "keep")
+  return(result)
+}
+
+uplingFilteredFeatures_varexp = filterFeatures(model, 1)
+uplingFilteredFeatures_congruence = filterByCongruence(uplingFeatureCongruences, model[[2]]$asv, "featureName", 0.4)
+
+# Combine filters
+uplingFilteredFeatures = uplingFilteredFeatures_varexp %>% mutate(keep = (uplingFilteredFeatures_varexp$keep==TRUE & uplingFilteredFeatures_congruence$keep==TRUE))
+
+```
+
+```{r checking the remaining feature names}
+HOMD_mapping = read.csv("./Homogenized data analysis/0. Raw data input/homd_result.csv") %>% as_tibble() %>% select(-X)
+labelledFilteredFeaturesPlot = function(model, filteredFeatures, title){
+  numComponents = ncol(model[[3]]) - 1
+  df = model[[2]] %>% left_join(filteredFeatures, by=c("asv" = "featureName")) %>% filter(keep==TRUE) %>% left_join(HOMD_mapping)
+  
+  if(numComponents == 1){
+    plot = df %>% ggplot(aes(x=Component_1, y=0, col=as.factor(Phylum), label=homd)) + geom_point() + geom_text_repel(col="black") + ggtitle(title)
+  }
+  else{
+    plot = df %>% ggplot(aes(x=Component_1, y=Component_2, col=as.factor(Phylum), label=homd)) + geom_point() + geom_text_repel(col="black", max.overlaps=50) + ggtitle(title)
+  }
+  
+  return(plot)
+}
+
+labelledFilteredFeaturesPlot(model, uplingFilteredFeatures, "upling")
+```
+
+```{r diagnostics for clustering}
+library(cluster)
+library(factoextra)
+
+plotClusteringDiagnostics_features = function(model, filteredFeatures){
+  selectedFeatures = filteredFeatures %>% filter(keep==TRUE) %>% select(featureName) %>% pull()
+  Xhat = model[[6]] %>% select(all_of(selectedFeatures))
+  
+  a = fviz_nbclust(t(Xhat), pam, method="wss")
+  b = fviz_nbclust(t(Xhat), pam, method="silhouette")
+  c = fviz_nbclust(t(Xhat), pam, method="gap_stat")
+  return(list(a,b,c))
+}
+
+plotClusteringDiagnostics_subjects = function(model){
+  Xhat = model[[4]] %>% t() %>% as_tibble()
+  
+  a = fviz_nbclust(t(Xhat), pam, method="wss")
+  b = fviz_nbclust(t(Xhat), pam, method="silhouette")
+  c = fviz_nbclust(t(Xhat), pam, method="gap_stat")
+  return(list(a,b,c))
+}
+
+plotClusteringDiagnostics_features(model, uplingFilteredFeatures)
+plotClusteringDiagnostics_subjects(model)
+```
+
+## Defining the feature groups
+```{r KNN clustering of the filtered features}
+clusterFeatureLoadings_filtered = function(model, filteredFeatures, numClusters){
+  numComponents = ncol(model[[3]]) - 1
+  Btilde = correctPARAFACloadings(model, 2)
+  colnames(Btilde) = paste0("Component_", 1:numComponents)
+  df = Btilde %>% as_tibble() %>% mutate(asv=model[[2]]$asv) %>% left_join(filteredFeatures, by = c("asv" = "featureName")) %>% filter(keep == 1)
+  result = df
+  
+  selectedFeatures = filteredFeatures %>% filter(keep==TRUE) %>% select(featureName) %>% pull()
+  Xhat = model[[6]] %>% select(all_of(selectedFeatures))
+  
+  set.seed(1)
+  result$group = pam(t(Xhat), numClusters, nstart=50)$cluster
+  result = result %>% left_join(HOMD_mapping)
+  
+  return(result)
+}
+
+plotFeatureClustering = function(model, filteredFeatures, featureClustering, title){
+  numComponents = ncol(model[[3]]) - 1
+  Btilde = correctPARAFACloadings(model, 2)
+  Btilde = Btilde[filteredFeatures$keep == TRUE,]
+  
+  if(numComponents==1){
+    plot = featureClustering %>% mutate(Component_1 = Btilde) %>% ggplot(aes(x=Component_1,y=0,col=as.factor(group))) + geom_point() + geom_vline(xintercept=0, linetype=2) + ggtitle(title) + xlab("Component 1") + ylab("Component 2") + scale_color_discrete(name="Cluster")
+  }
+  else{
+    plot = featureClustering %>% mutate(Component_1 = Btilde[,1], Component_2 = Btilde[,2]) %>% ggplot(aes(x=Component_1,y=Component_2,col=as.factor(group))) + geom_point() + geom_vline(xintercept=0, linetype=2) + geom_hline(yintercept=0, linetype=2) + ggtitle(title) + xlab("Component 1") + ylab("Component 2") + scale_color_discrete(name="Cluster")
+  }
+  
+  return(plot)
+}
+
+plotFeatureClustering_meta = function(model, filteredFeatures, featureClustering, title){
+  numComponents = ncol(model[[3]]) - 1
+  Btilde = correctPARAFACloadings(model, 2)
+  Btilde = Btilde[filteredFeatures$keep == TRUE,]
+  
+  if(numComponents==1){
+    featureClustering = featureClustering %>% left_join(model[[2]] %>% select(-Component_1))
+    plot = featureClustering %>% mutate(Component_1 = Btilde) %>% ggplot(aes(x=Component_1,y=0,col=as.factor(Phylum))) + geom_point() + geom_vline(xintercept=0, linetype=2) + ggtitle(title)
+  }
+  else{
+    featureClustering = featureClustering %>% left_join(model[[2]] %>% select(-Component_1,-Component_2))
+    plot = featureClustering %>% mutate(Component_1 = Btilde[,1], Component_2 = Btilde[,2]) %>% ggplot(aes(x=Component_1,y=Component_2,col=as.factor(Phylum))) + geom_point() + geom_vline(xintercept=0, linetype=2) + geom_hline(yintercept=0, linetype=2) + ggtitle(title)
+  }
+  
+  return(plot)
+}
+
+uplingFeatureClustering = clusterFeatureLoadings_filtered(model, uplingFilteredFeatures, 2)
+a = plotFeatureClustering(model, uplingFilteredFeatures, uplingFeatureClustering, "upling")
+b = plotFeatureClustering_meta(model, uplingFilteredFeatures, uplingFeatureClustering, "upling")
+ggarrange(a,b)
+```
+
+```{r plot for paper}
+df = featureMode %>% left_join(uplingFeatureClustering)
+df[is.na(df$keep),"Phylum"] = "Unclustered"
+
+a = subjectMode %>% ggplot(aes(x=Component_1,y=Component_2,col=as.factor(RFgroup))) + geom_point() + xlab("Component 1") + ylab("Component 2") + theme(legend.position="none",text=element_text(size=14)) + ggtitle("Subject mode")
+b = df %>% ggplot(aes(x=Component_1,y=Component_2,col=as.factor(Phylum))) + geom_point() + xlab("Component 1") + ylab("Component 2") + theme(legend.position="none", text=element_text(size=14)) + scale_color_manual(name="Phylum",labels=c("Actinobacteriota","Bacteroidota","Firmicutes","Fusobacteriota","Proteobacteria","Unclustered"), values=c("#F8766D","#00B0F6","#A3A500","#E76BF3","#00BF7D","gray")) + ggtitle("Feature mode")
+c = timeMode %>% ggplot(aes(x=Component_1,y=Component_2,label=timepoint)) + geom_path() + geom_point() + geom_text_repel() + xlab("Component 1") + ylab("Component 2") + theme(legend.position="none",text=element_text(size=14)) + ggtitle("Time mode")
+ggarrange(a,b,c,nrow=1)
+
+subjectMode %>% ggplot(aes(x=Component_1,y=Component_2,col=as.factor(RFgroup))) + geom_point() + xlab("Component 1") + ylab("Component 2") + theme(legend.position="bottom",text=element_text(size=14)) + ggtitle("Subject mode") + scale_color_manual(name="Response group", labels=c("Low", "Mid", "High"), values=c("#F8766D","#00BA38","#619CFF"))
+```
+
+```{r plots for paper}
+# RelAbs plot
+relAbsPlotData %>% pivot_longer(-c(RFgroup,visit)) %>% left_join(taxa, by=c("name"="asv")) %>% filter(Phylum %in% model[[2]]$Phylum) %>% mutate(RFgroup = factor(RFgroup, levels=c("Low","Mid","High"))) %>% ggplot(aes(x=as.factor(visit),y=value,fill=as.factor(Phylum))) + facet_grid(vars(RFgroup)) + geom_bar(stat="identity") + ylab("Relative abundance") + xlab("Time point [days]") + theme(legend.position="none", text=element_text(size=14))
+```
+
+```{r relative abundance sum plot}
+convertedVisit = c(-14,0,2,5,9,14,21)
+
+relAbs %>% as_tibble() %>% mutate(subject = countData$subject, timepoint = convertedVisit[countData$visit]) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(rf) %>% left_join(uplingFeatureClustering,by=c("name"="asv")) %>% filter(group != "NA") %>% select(-Component_1,-Component_2,-keep,-homd) %>% left_join(taxa,by=c("name"="asv")) %>% filter(RFgroup != 1) %>% group_by(subject,timepoint,group) %>% summarize(s=log10(sum(value)+1)) %>% left_join(rf) %>% ungroup() %>% group_by(RFgroup,timepoint,group) %>% summarize(m=mean(s,na.rm=TRUE),v=plotrix::std.error(s,na.rm=TRUE)) %>% ungroup() %>% ggplot(aes(x=as.factor(timepoint),y=m,col=as.factor(RFgroup),group=as.factor(RFgroup))) + facet_grid(cols=vars(group)) + geom_line() + geom_errorbar(aes(ymax=m+v,ymin=m-v,width=.2)) + geom_point() + theme(legend.position="none",text=element_text(size=14)) + xlab("Time point [days]") + ylab("Sum of ASVs per group (mean +/- SEM)")
+```
