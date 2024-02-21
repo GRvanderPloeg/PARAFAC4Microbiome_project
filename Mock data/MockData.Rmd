@@ -188,7 +188,7 @@ a=BC_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=r
 b=BC_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point()
 ggarrange(a,b)
 
-c=A_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% left_join(design) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(phenotype))) + geom_point() + scale_color_manual(name="Subject group", labels=c("Case", "Control"), values=c("#F8766D", "#00B0F6")) + xlab("PCoA Component 1 (95%)") + ylab("PCoA Component 2 (5%)") + theme(legend.position="top")
+c=A_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% left_join(design) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(phenotype))) + geom_point() + scale_color_manual(name="Subject group", labels=c("Case", "Control"), values=c("#F8766D", "#00B0F6")) + xlab("PCoA Component 1 (95%)") + ylab("PCoA Component 2 (5%)") + theme(text=element_text(size=14))
 c = c + theme(legend.position="none", text=element_text(size=14))
 d=A_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point() + xlab("PCoA Component 1 (95%)") + ylab("PCoA Component 2 (5%)") + theme(legend.position="top")
 d = d + theme(legend.position="none", text=element_text(size=14))
