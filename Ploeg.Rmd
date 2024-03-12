@@ -1,0 +1,83 @@
+---
+title: "Ploeg"
+author: "G.R. van der Ploeg"
+date: "2024-03-12"
+output: html_document
+---
+
+```{r setup}
+library(parafac4microbiome)
+library(tidyverse)
+library(multiway)
+set.seed(123)
+```
+
+```{r prep plot data}
+# Plot settings
+colourCols = c("RFgroup", "Phylum", "")
+legendTitles = c("RF group", "Phylum", "")
+xLabels = c("Subject index", "Feature index", "Time index")
+legendColNums = c(2,5,0)
+arrangeModes = c(TRUE, TRUE, FALSE)
+continuousModes = c(FALSE,FALSE,TRUE)
+```
+
+```{r create relabs plot}
+I = dim(vanderPloeg2024$data)[1]
+J = dim(vanderPloeg2024$data)[2]
+K = dim(vanderPloeg2024$data)[3]
+
+countMatrix = matrix(vanderPloeg2024$data, nrow=I)
+newColNames = paste0(rep(vanderPloeg2024$mode2$asv,K), "_t", rep(1:K, each=J))
+colnames(countMatrix) = newColNames
+countMatrix = countMatrix %>% as_tibble() %>% mutate(subject=vanderPloeg2024$mode1$subject) %>% pivot_longer(-subject) %>% mutate(timepoint=as.numeric(str_split_fixed(name,"_t",2)[,2]),id=str_split_fixed(name,"_t",2)[,1]) %>% select(-name) %>% pivot_wider(names_from=id,values_from=value) # shenanigans to create an I*K x J matrix
+countMatrix.numeric = countMatrix %>% select(-subject,-timepoint)
+
+totalSums = rowSums(countMatrix.numeric)
+relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
+
+# Plot 4A
+relAbs %>% mutate(subject=countMatrix$subject, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(vanderPloeg2024$mode1) %>% left_join(vanderPloeg2024$mode2, by=c("name"="asv")) %>% group_by(subject,timepoint,Phylum) %>% summarize(s=sum(value)) %>% left_join(vanderPloeg2024$mode1) %>% ungroup() %>% group_by(RFgroup,Phylum,timepoint) %>% summarize(m=mean(s,na.rm=TRUE)) %>% ungroup() %>% ggplot(aes(x=as.factor(timepoint),y=m,fill=as.factor(Phylum))) + facet_wrap(vars(RFgroup),nrow=3,strip.position="right") + geom_bar(stat="identity") + xlab("Time point [days]") + ylab("Relative abundance") + theme(legend.position="none")
+```
+
+```{r process the data}
+processedPloeg = processDataCube(vanderPloeg2024, sparsityThreshold=0.5, considerGroups=TRUE, groupVariable="RFgroup", centerMode=1, scaleMode=2)
+```
+
+```{r investigate num comp}
+numRepetitions = 5
+assessment = assessNumComponents(processedPloeg$data, minNumComponents=1, maxNumComponents=5, numRepetitions=5, ctol=1e-6, maxit=200, numCores=1)
+```
+
+```{r check the plots}
+assessment$plots$overview
+```
+
+```{r model stability}
+numFolds = 5
+
+stability2 = modelStabilityCheck(processedPloeg, numComponents=2, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes)
+stability3 = modelStabilityCheck(processedPloeg, numComponents=3, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes)
+
+stability2$plot
+stability3$plot
+# So we choose 2 components
+```
+
+```{r select the model}
+numComponents = 2
+modelChoice = which(assessment$metrics$varExp[,numComponents] == max(assessment$metrics$varExp[,numComponents]))
+finalModel = assessment$models[[numComponents]][[modelChoice]]
+
+# Correct time loadings
+finalModel = resign(finalModel, mode="C", absorb="B")
+```
+
+```{r plot the model}
+# Plot 4B
+varExp = calculateVarExp(finalModel, processedPloeg$data)
+
+plotPARAFACmodel(finalModel, processedPloeg, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+  continuousModes = c(FALSE,FALSE,TRUE),
+  overallTitle = " ")
+```

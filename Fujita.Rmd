@@ -26,7 +26,7 @@ I = dim(Fujita2023$data)[1]
 J = dim(Fujita2023$data)[2]
 K = dim(Fujita2023$data)[3]
 
-countMatrix = matrix(Fujita2023$data, nrow=I) # INCORRECT
+countMatrix = matrix(Fujita2023$data, nrow=I)
 newColNames = paste0(rep(Fujita2023$mode2$ID,110), "_t", rep(1:110, each=J))
 colnames(countMatrix) = newColNames
 countMatrix = countMatrix %>% as_tibble() %>% mutate(replicate=1:8) %>% pivot_longer(-replicate) %>% mutate(timepoint=as.numeric(str_split_fixed(name,"_t",2)[,2]),id=str_split_fixed(name,"_t",2)[,1]) %>% select(-name) %>% pivot_wider(names_from=id,values_from=value) # shenanigans to create an I*K x J matrix
@@ -80,5 +80,5 @@ varExp = calculateVarExp(finalModel, processedFujita$data)
 
 plotPARAFACmodel(finalModel, processedFujita, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
   continuousModes = c(FALSE,FALSE,TRUE),
-  overallTitle = "")
+  overallTitle = " ")
 ```
