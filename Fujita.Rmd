@@ -6,6 +6,9 @@ date: "2024-03-10"
 
 ```{r setup}
 library(parafac4microbiome)
+library(tidyverse)
+library(multiway)
+set.seed(123)
 ```
 
 ```{r prep plot data}
@@ -18,12 +21,31 @@ arrangeModes = c(FALSE, TRUE, FALSE)
 continuousModes = c(FALSE,FALSE,TRUE)
 ```
 
+```{r create relabs plot}
+I = dim(Fujita2023$data)[1]
+J = dim(Fujita2023$data)[2]
+K = dim(Fujita2023$data)[3]
+
+countMatrix = matrix(Fujita2023$data, nrow=I) # INCORRECT
+newColNames = paste0(rep(Fujita2023$mode2$ID,110), "_t", rep(1:110, each=J))
+colnames(countMatrix) = newColNames
+countMatrix = countMatrix %>% as_tibble() %>% mutate(replicate=1:8) %>% pivot_longer(-replicate) %>% mutate(timepoint=as.numeric(str_split_fixed(name,"_t",2)[,2]),id=str_split_fixed(name,"_t",2)[,1]) %>% select(-name) %>% pivot_wider(names_from=id,values_from=value) # shenanigans to create an I*K x J matrix
+countMatrix.numeric = countMatrix %>% select(-replicate,-timepoint)
+
+totalSums = rowSums(countMatrix.numeric)
+relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
+
+# Plot 2A
+relAbs %>% mutate(replicate=countMatrix$replicate, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(replicate,timepoint)) %>% left_join(Fujita2023$mode2, by=c("name"="ID")) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(Genus))) + facet_wrap(vars(replicate),nrow=8,strip.position="right") + geom_bar(stat="identity",col="black") + theme(legend.position="None") + xlab("Time point") + ylab("Relative abundance")
+```
+
 ```{r process the data}
-processedFujita = processDataCube(Fujita2023, sparsityThreshold=1, centerMode=1, scaleMode=2)
+processedFujita = processDataCube(Fujita2023, sparsityThreshold=0.99, centerMode=1, scaleMode=2)
 ```
 
 ```{r investigate num comp}
-assessment = assessNumComponents(processedFujita$data)
+numRepetitions = 50
+assessment = assessNumComponents(processedFujita$data, minNumComponents=1, maxNumComponents=5, numRepetitions=5, ctol=1e-6, maxit=200, numCores=1)
 ```
 
 ```{r check the plots}
@@ -40,4 +62,23 @@ stability4 = modelStabilityCheck(processedFujita, numComponents=4, numFolds=numF
 stability3$plot
 stability4$plot
 # So we choose 3 components
+```
+
+```{r select the model}
+numComponents = 3
+modelChoice = which(assessment$metrics$varExp[,numComponents] == max(assessment$metrics$varExp[,numComponents]))
+finalModel = assessment$models[[numComponents]][[modelChoice]]
+
+# Make the important loadings positive for easier interpretation
+finalModel = resign(finalModel, mode="C", absorb="A")
+finalModel = resign(finalModel, mode="B", absorb="A")
+```
+
+```{r plot the model}
+# Plot 2B
+varExp = calculateVarExp(finalModel, processedFujita$data)
+
+plotPARAFACmodel(finalModel, processedFujita, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+  continuousModes = c(FALSE,FALSE,TRUE),
+  overallTitle = "")
 ```
