@@ -9,6 +9,7 @@ output: html_document
 library(parafac4microbiome)
 library(tidyverse)
 library(multiway)
+library(ggpubr)
 set.seed(123)
 ```
 
@@ -40,13 +41,21 @@ relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
 relAbs %>% mutate(subject=countMatrix$subject, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(vanderPloeg2024$mode1) %>% left_join(vanderPloeg2024$mode2, by=c("name"="asv")) %>% group_by(subject,timepoint,Phylum) %>% summarize(s=sum(value)) %>% left_join(vanderPloeg2024$mode1) %>% ungroup() %>% group_by(RFgroup,Phylum,timepoint) %>% summarize(m=mean(s,na.rm=TRUE)) %>% ungroup() %>% ggplot(aes(x=as.factor(timepoint),y=m,fill=as.factor(Phylum))) + facet_wrap(vars(RFgroup),nrow=3,strip.position="right") + geom_bar(stat="identity") + xlab("Time point [days]") + ylab("Relative abundance") + theme(legend.position="none")
 ```
 
+```{r check sparsity}
+sparsity = calculateSparsity(vanderPloeg2024, considerGroups = TRUE, groupVariable = "RFgroup")
+
+sparsity[1,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram()
+sparsity[2,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram()
+sparsity[3,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram()
+```
+
 ```{r process the data}
 processedPloeg = processDataCube(vanderPloeg2024, sparsityThreshold=0.5, considerGroups=TRUE, groupVariable="RFgroup", centerMode=1, scaleMode=2)
 ```
 
 ```{r investigate num comp}
-numRepetitions = 5
-assessment = assessNumComponents(processedPloeg$data, minNumComponents=1, maxNumComponents=5, numRepetitions=5, ctol=1e-6, maxit=200, numCores=1)
+numRepetitions = 25
+assessment = assessNumComponents(processedPloeg$data, minNumComponents=1, maxNumComponents=5, numRepetitions=5, ctol=1e-6, maxit=500, numCores=12)
 ```
 
 ```{r check the plots}
@@ -54,10 +63,10 @@ assessment$plots$overview
 ```
 
 ```{r model stability}
-numFolds = 5
+numFolds = 25
 
-stability2 = modelStabilityCheck(processedPloeg, numComponents=2, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes)
-stability3 = modelStabilityCheck(processedPloeg, numComponents=3, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes)
+stability2 = modelStabilityCheck(processedPloeg, numComponents=2, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
+stability3 = modelStabilityCheck(processedPloeg, numComponents=3, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
 
 stability2$plot
 stability3$plot
@@ -80,4 +89,16 @@ varExp = calculateVarExp(finalModel, processedPloeg$data)
 plotPARAFACmodel(finalModel, processedPloeg, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
   continuousModes = c(FALSE,FALSE,TRUE),
   overallTitle = " ")
+```
+
+```{r plot scatter plots after transformation}
+correctedA = correctPARAFACloadings(processedPloeg, finalModel, 1)
+correctedB = correctPARAFACloadings(processedPloeg, finalModel, 2)
+correctedC = correctPARAFACloadings(processedPloeg, finalModel, 3)
+
+a=cbind(correctedA, processedPloeg$mode1) %>% as_tibble() %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(RFgroup))) + geom_point() + theme(legend.position="none")
+b=cbind(correctedB, processedPloeg$mode2) %>% as_tibble() %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(Phylum))) + geom_point() + theme(legend.position="none")
+c=cbind(correctedC, processedPloeg$mode3) %>% as_tibble() %>% ggplot(aes(x=`1`,y=`2`)) + geom_point() + geom_path()
+
+ggarrange(a,b,c, nrow=1)
 ```

@@ -40,13 +40,21 @@ relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
 relAbs %>% mutate(subject=countMatrix$subject, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(Shao2019$mode1, by=c("subject"="Individual")) %>% left_join(Shao2019$mode2, by=c("name"="OTU")) %>% group_by(subject,timepoint,phylum) %>% summarize(s=sum(value)) %>% left_join(Shao2019$mode1, by=c("subject"="Individual")) %>% ungroup() %>% group_by(Delivery_mode,phylum,timepoint) %>% summarize(m=mean(s,na.rm=TRUE)) %>% ungroup() %>% ggplot(aes(x=as.factor(timepoint),y=m,fill=as.factor(phylum))) + facet_wrap(vars(Delivery_mode),nrow=2,strip.position="right") + geom_bar(stat="identity") + xlab("Time point [days]") + ylab("Relative abundance") + theme(legend.position="none")
 ```
 
+```{r check sparsity}
+sparsity = calculateSparsity(Shao2019, considerGroups=TRUE, groupVariable="Delivery_mode")
+
+sparsity[1,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram()
+sparsity[2,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram()
+t(sparsity) %>% as_tibble() %>% ggplot(aes(x=V1,y=V2)) + geom_point()
+```
+
 ```{r process the data}
 processedShao = processDataCube(Shao2019, sparsityThreshold=0.9, considerGroups=TRUE, groupVariable="Delivery_mode", centerMode=1, scaleMode=2)
 ```
 
 ```{r investigate num comp}
-numRepetitions = 5
-assessment = assessNumComponents(processedShao$data, minNumComponents=1, maxNumComponents=5, numRepetitions=5, ctol=1e-6, maxit=200, numCores=1)
+numRepetitions = 25
+assessment = assessNumComponents(processedShao$data, minNumComponents=1, maxNumComponents=5, numRepetitions=5, ctol=1e-6, maxit=500, numCores=12)
 ```
 
 ```{r check the plots}
@@ -54,11 +62,11 @@ assessment$plots$overview
 ```
 
 ```{r model stability}
-numFolds = 5
+numFolds = 25
 
-stability2 = modelStabilityCheck(processedShao, numComponents=2, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes)
-stability3 = modelStabilityCheck(processedShao, numComponents=3, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes)
-stability4 = modelStabilityCheck(processedShao, numComponents=4, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes)
+stability2 = modelStabilityCheck(processedShao, numComponents=2, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
+stability3 = modelStabilityCheck(processedShao, numComponents=3, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
+stability4 = modelStabilityCheck(processedShao, numComponents=4, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
 
 stability2$plot
 stability3$plot
