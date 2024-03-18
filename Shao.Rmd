@@ -9,6 +9,7 @@ output: html_document
 library(parafac4microbiome)
 library(tidyverse)
 library(multiway)
+library(ggpubr)
 set.seed(123)
 ```
 
@@ -22,29 +23,11 @@ arrangeModes = c(TRUE, TRUE, FALSE)
 continuousModes = c(FALSE,FALSE,TRUE)
 ```
 
-```{r create relabs plot}
-I = dim(Shao2019$data)[1]
-J = dim(Shao2019$data)[2]
-K = dim(Shao2019$data)[3]
-
-countMatrix = matrix(Shao2019$data, nrow=I)
-newColNames = paste0(rep(Shao2019$mode2$OTU,K), "_t", rep(1:K, each=J))
-colnames(countMatrix) = newColNames
-countMatrix = countMatrix %>% as_tibble() %>% mutate(subject=Shao2019$mode1$Individual) %>% pivot_longer(-subject) %>% mutate(timepoint=as.numeric(str_split_fixed(name,"_t",2)[,2]),id=str_split_fixed(name,"_t",2)[,1]) %>% select(-name) %>% pivot_wider(names_from=id,values_from=value) # shenanigans to create an I*K x J matrix
-countMatrix.numeric = countMatrix %>% select(-subject,-timepoint)
-
-totalSums = rowSums(countMatrix.numeric)
-relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
-
-# Plot 3A
-relAbs %>% mutate(subject=countMatrix$subject, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(Shao2019$mode1, by=c("subject"="Individual")) %>% left_join(Shao2019$mode2, by=c("name"="OTU")) %>% group_by(subject,timepoint,phylum) %>% summarize(s=sum(value)) %>% left_join(Shao2019$mode1, by=c("subject"="Individual")) %>% ungroup() %>% group_by(Delivery_mode,phylum,timepoint) %>% summarize(m=mean(s,na.rm=TRUE)) %>% ungroup() %>% ggplot(aes(x=as.factor(timepoint),y=m,fill=as.factor(phylum))) + facet_wrap(vars(Delivery_mode),nrow=2,strip.position="right") + geom_bar(stat="identity") + xlab("Time point [days]") + ylab("Relative abundance") + theme(legend.position="none")
-```
-
 ```{r check sparsity}
 sparsity = calculateSparsity(Shao2019, considerGroups=TRUE, groupVariable="Delivery_mode")
 
-sparsity[1,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram()
-sparsity[2,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram()
+sparsity[1,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram() + xlab("Sparsity (%)") + ylab("Count") + ggtitle("C-section born")
+sparsity[2,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram() + xlab("Sparsity (%)") + ylab("Count") + ggtitle("Vaginally born")
 t(sparsity) %>% as_tibble() %>% ggplot(aes(x=V1,y=V2)) + geom_point()
 ```
 
@@ -87,7 +70,69 @@ finalModel = resign(finalModel, mode="C", absorb="B")
 # Plot 4B
 varExp = calculateVarExp(finalModel, processedShao$data)
 
+plotlist = plotPARAFACmodel(finalModel, processedShao, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+  continuousModes = c(FALSE,FALSE,TRUE),
+  overallTitle = "")
 plotPARAFACmodel(finalModel, processedShao, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
   continuousModes = c(FALSE,FALSE,TRUE),
   overallTitle = " ")
+
+newPlotlist = list()
+for(i in 1:6){
+  
+  if(i==3 | i==6){
+    newPlotlist[[i]] = plotlist[[i]] + theme(text=element_text(size=14)) + scale_x_continuous(labels=c("4","7","21","Infancy"))
+  }else{
+    newPlotlist[[i]] = plotlist[[i]] + theme(text=element_text(size=14))
+  }
+  
+}
+
+ggarrange(plotlist=newPlotlist, ncol=3, nrow=2)
 ```
+
+```{r create relabs plot}
+I = dim(Shao2019$data)[1]
+J = dim(Shao2019$data)[2]
+K = dim(Shao2019$data)[3]
+timepoints = c("4", "7", "21", "Infancy")
+
+countMatrix = matrix(Shao2019$data, nrow=I)
+newColNames = paste0(rep(Shao2019$mode2$OTU,K), "_t", rep(1:K, each=J))
+colnames(countMatrix) = newColNames
+countMatrix = countMatrix %>% as_tibble() %>% mutate(subject=Shao2019$mode1$Individual) %>% pivot_longer(-subject) %>% mutate(timepoint=as.numeric(str_split_fixed(name,"_t",2)[,2]),id=str_split_fixed(name,"_t",2)[,1]) %>% select(-name) %>% pivot_wider(names_from=id,values_from=value) # shenanigans to create an I*K x J matrix
+countMatrix.numeric = countMatrix %>% select(processedShao$mode2$OTU)
+
+totalSums = rowSums(countMatrix.numeric)
+relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
+
+# Plot 3A
+relAbs %>% mutate(subject=countMatrix$subject, timepoint=timepoints[countMatrix$timepoint]) %>% pivot_longer(-c(subject,timepoint)) %>% filter(name %in% processedShao$mode2$OTU) %>% left_join(Shao2019$mode1, by=c("subject"="Individual")) %>% left_join(Shao2019$mode2, by=c("name"="OTU")) %>% group_by(subject,timepoint,phylum) %>% summarize(s=sum(value)) %>% left_join(Shao2019$mode1, by=c("subject"="Individual")) %>% ungroup() %>% group_by(Delivery_mode,phylum,timepoint) %>% summarize(m=mean(s,na.rm=TRUE)) %>% ungroup() %>% mutate(timepoint = factor(timepoint, levels=c("4","7","21","Infancy"))) %>% ggplot(aes(x=as.factor(timepoint),y=m,fill=as.factor(phylum))) + facet_wrap(vars(Delivery_mode),nrow=2,strip.position="right") + geom_bar(stat="identity") + xlab("Time point [days]") + ylab("Relative abundance") + theme(legend.position="none", text=element_text(size=14))
+
+relAbs %>% mutate(subject=countMatrix$subject, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(subject,timepoint)) %>% filter(name %in% processedShao$mode2$OTU) %>% left_join(Shao2019$mode1, by=c("subject"="Individual")) %>% left_join(Shao2019$mode2, by=c("name"="OTU")) %>% group_by(subject,timepoint,phylum) %>% summarize(s=sum(value)) %>% left_join(Shao2019$mode1, by=c("subject"="Individual")) %>% ungroup() %>% group_by(Delivery_mode,phylum,timepoint) %>% summarize(m=mean(s,na.rm=TRUE)) %>% ungroup() %>% ggplot(aes(x=as.factor(timepoint),y=m,fill=as.factor(phylum))) + facet_wrap(vars(Delivery_mode),nrow=2,strip.position="right") + geom_bar(stat="identity") + xlab("Time point [days]") + ylab("Relative abundance")
+```
+
+```{r test metadata}
+sampleMeta = read.csv("./Shao2019/Data/sampleMetadata.csv", skip=2) %>% as_tibble()
+subjectLoadings = cbind(finalModel$A, processedShao$mode1) %>% as_tibble() %>% left_join(sampleMeta)
+
+subjectLoadings %>% select(1, 2, Delivery_mode) %>% pivot_longer(-Delivery_mode) %>% ggplot(aes(x=Delivery_mode,y=value)) + facet_wrap(vars(name)) + geom_boxplot() + stat_compare_means()
+
+subjectLoadings %>% select(1,2, Feeding_method) %>% pivot_longer(-Feeding_method) %>% filter(Feeding_method %in% c("BF", "NoBF")) %>% ggplot(aes(x=Feeding_method,y=value)) + facet_wrap(vars(name)) + geom_boxplot() + stat_compare_means()
+
+subjectLoadings %>% select(1,2, Abx_mother_labour_IAP) %>% pivot_longer(-Abx_mother_labour_IAP) %>% filter(Abx_mother_labour_IAP %in% c("Yes", "No")) %>% ggplot(aes(x=Abx_mother_labour_IAP,y=value)) + facet_wrap(vars(name)) + geom_boxplot() + stat_compare_means()
+
+subjectLoadings %>% select(1,2, Abx_Baby_in_hospital) %>% pivot_longer(-Abx_Baby_in_hospital) %>% filter(Abx_Baby_in_hospital %in% c("Yes", "No")) %>% ggplot(aes(x=Abx_Baby_in_hospital,y=value)) + facet_wrap(vars(name)) + geom_boxplot() + stat_compare_means()
+
+subjectLoadings %>% select(1,2, Abx_Baby_after_hospital) %>% pivot_longer(-Abx_Baby_after_hospital) %>% filter(Abx_Baby_after_hospital %in% c("Yes", "No")) %>% ggplot(aes(x=Abx_Baby_after_hospital,y=value)) + facet_wrap(vars(name)) + geom_boxplot() + stat_compare_means()
+
+subjectLoadings %>% select(1,2, Bacteroides_profile) %>% pivot_longer(-Bacteroides_profile) %>% filter(Bacteroides_profile != "NA") %>% ggplot(aes(x=Bacteroides_profile,y=value)) + facet_wrap(vars(name)) + geom_boxplot() + stat_compare_means()
+
+uncorrectedP = c(0.14, 2.2e-16, 0.000016, 0.059, 0.16, 0.9, 1.3e-08, 0.24, 0.75, 0.7, 0.01, 2.2e-16)
+correctedP = p.adjust(uncorrectedP, "BH")
+
+matrix(uncorrectedP, nrow=2)
+
+matrix(correctedP, nrow=2)
+```
+

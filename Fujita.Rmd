@@ -21,27 +21,9 @@ arrangeModes = c(FALSE, TRUE, FALSE)
 continuousModes = c(FALSE,FALSE,TRUE)
 ```
 
-```{r create relabs plot}
-I = dim(Fujita2023$data)[1]
-J = dim(Fujita2023$data)[2]
-K = dim(Fujita2023$data)[3]
-
-countMatrix = matrix(Fujita2023$data, nrow=I)
-newColNames = paste0(rep(Fujita2023$mode2$ID,110), "_t", rep(1:110, each=J))
-colnames(countMatrix) = newColNames
-countMatrix = countMatrix %>% as_tibble() %>% mutate(replicate=1:8) %>% pivot_longer(-replicate) %>% mutate(timepoint=as.numeric(str_split_fixed(name,"_t",2)[,2]),id=str_split_fixed(name,"_t",2)[,1]) %>% select(-name) %>% pivot_wider(names_from=id,values_from=value) # shenanigans to create an I*K x J matrix
-countMatrix.numeric = countMatrix %>% select(-replicate,-timepoint)
-
-totalSums = rowSums(countMatrix.numeric)
-relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
-
-# Plot 2A
-relAbs %>% mutate(replicate=countMatrix$replicate, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(replicate,timepoint)) %>% left_join(Fujita2023$mode2, by=c("name"="ID")) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(Genus))) + facet_wrap(vars(replicate),nrow=8,strip.position="right") + geom_bar(stat="identity",col="black") + theme(legend.position="None") + xlab("Time point") + ylab("Relative abundance")
-```
-
 ```{r determining a sparsity threshold}
 sparsity = calculateSparsity(Fujita2023)
-sparsity %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(bins=50)
+sparsity %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(bins=50) + xlab("Sparsity (%)") + ylab("Count")
 ```
 
 ```{r process the data}
@@ -83,7 +65,38 @@ finalModel = resign(finalModel, mode="B", absorb="A")
 # Plot 2B
 varExp = calculateVarExp(finalModel, processedFujita$data)
 
+plotlist = plotPARAFACmodel(finalModel, processedFujita, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+                 continuousModes = c(FALSE,FALSE,TRUE),
+                 overallTitle = "")
 plotPARAFACmodel(finalModel, processedFujita, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
-  continuousModes = c(FALSE,FALSE,TRUE),
-  overallTitle = " ")
+                 continuousModes = c(FALSE,FALSE,TRUE),
+                 overallTitle = " ")
+
+newPlotlist = list()
+for(i in 1:9){
+  newPlotlist[[i]] = plotlist[[i]] + theme(text=element_text(size=14))
+}
+
+ggarrange(plotlist=newPlotlist, ncol=3, nrow=4)
+```
+
+
+```{r create relabs plot}
+I = dim(Fujita2023$data)[1]
+J = dim(Fujita2023$data)[2]
+K = dim(Fujita2023$data)[3]
+
+countMatrix = matrix(Fujita2023$data, nrow=I)
+newColNames = paste0(rep(Fujita2023$mode2$ID,110), "_t", rep(1:110, each=J))
+colnames(countMatrix) = newColNames
+countMatrix = countMatrix %>% as_tibble() %>% mutate(replicate=1:8) %>% pivot_longer(-replicate) %>% mutate(timepoint=as.numeric(str_split_fixed(name,"_t",2)[,2]),id=str_split_fixed(name,"_t",2)[,1]) %>% select(-name) %>% pivot_wider(names_from=id,values_from=value) # shenanigans to create an I*K x J matrix
+countMatrix.numeric = countMatrix %>% select(-replicate,-timepoint)
+
+totalSums = rowSums(countMatrix.numeric)
+relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
+
+# Plot 2A
+relAbs %>% mutate(replicate=countMatrix$replicate, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(replicate,timepoint)) %>% filter(name %in% processedFujita$mode2$ID) %>% left_join(Fujita2023$mode2, by=c("name"="ID")) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(Genus))) + facet_wrap(vars(replicate),nrow=8,strip.position="right") + geom_bar(stat="identity",col="black") + theme(legend.position="None", axis.text.x = element_text(angle=90, vjust=0.5,hjust=1)) + xlab("Time point") + ylab("Relative abundance")
+
+relAbs %>% mutate(replicate=countMatrix$replicate, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(replicate,timepoint)) %>% filter(name %in% processedFujita$mode2$ID) %>% left_join(Fujita2023$mode2, by=c("name"="ID")) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(Genus))) + facet_wrap(vars(replicate),nrow=8,strip.position="right") + geom_bar(stat="identity",col="black") + theme(axis.text.x = element_text(angle=90, vjust=0.5,hjust=1)) + xlab("Time point") + ylab("Relative abundance")
 ```

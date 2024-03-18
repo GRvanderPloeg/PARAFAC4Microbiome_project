@@ -18,35 +18,17 @@ set.seed(123)
 colourCols = c("RFgroup", "Phylum", "")
 legendTitles = c("RF group", "Phylum", "")
 xLabels = c("Subject index", "Feature index", "Time index")
-legendColNums = c(2,5,0)
+legendColNums = c(3,5,0)
 arrangeModes = c(TRUE, TRUE, FALSE)
 continuousModes = c(FALSE,FALSE,TRUE)
-```
-
-```{r create relabs plot}
-I = dim(vanderPloeg2024$data)[1]
-J = dim(vanderPloeg2024$data)[2]
-K = dim(vanderPloeg2024$data)[3]
-
-countMatrix = matrix(vanderPloeg2024$data, nrow=I)
-newColNames = paste0(rep(vanderPloeg2024$mode2$asv,K), "_t", rep(1:K, each=J))
-colnames(countMatrix) = newColNames
-countMatrix = countMatrix %>% as_tibble() %>% mutate(subject=vanderPloeg2024$mode1$subject) %>% pivot_longer(-subject) %>% mutate(timepoint=as.numeric(str_split_fixed(name,"_t",2)[,2]),id=str_split_fixed(name,"_t",2)[,1]) %>% select(-name) %>% pivot_wider(names_from=id,values_from=value) # shenanigans to create an I*K x J matrix
-countMatrix.numeric = countMatrix %>% select(-subject,-timepoint)
-
-totalSums = rowSums(countMatrix.numeric)
-relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
-
-# Plot 4A
-relAbs %>% mutate(subject=countMatrix$subject, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(vanderPloeg2024$mode1) %>% left_join(vanderPloeg2024$mode2, by=c("name"="asv")) %>% group_by(subject,timepoint,Phylum) %>% summarize(s=sum(value)) %>% left_join(vanderPloeg2024$mode1) %>% ungroup() %>% group_by(RFgroup,Phylum,timepoint) %>% summarize(m=mean(s,na.rm=TRUE)) %>% ungroup() %>% ggplot(aes(x=as.factor(timepoint),y=m,fill=as.factor(Phylum))) + facet_wrap(vars(RFgroup),nrow=3,strip.position="right") + geom_bar(stat="identity") + xlab("Time point [days]") + ylab("Relative abundance") + theme(legend.position="none")
 ```
 
 ```{r check sparsity}
 sparsity = calculateSparsity(vanderPloeg2024, considerGroups = TRUE, groupVariable = "RFgroup")
 
-sparsity[1,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram()
-sparsity[2,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram()
-sparsity[3,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram()
+sparsity[1,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram() + xlab("Sparsity (%)") + ylab("Count") + ggtitle("Low responders")
+sparsity[2,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram() + xlab("Sparsity (%)") + ylab("Count") + ggtitle("Mid responders")
+sparsity[3,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram() + xlab("Sparsity (%)") + ylab("Count") + ggtitle("High responders")
 ```
 
 ```{r process the data}
@@ -60,6 +42,7 @@ assessment = assessNumComponents(processedPloeg$data, minNumComponents=1, maxNum
 
 ```{r check the plots}
 assessment$plots$overview
+assessment$plots$TCC[[3]]
 ```
 
 ```{r model stability}
@@ -67,9 +50,11 @@ numFolds = 25
 
 stability2 = modelStabilityCheck(processedPloeg, numComponents=2, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
 stability3 = modelStabilityCheck(processedPloeg, numComponents=3, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
+stability4 = modelStabilityCheck(processedPloeg, numComponents=4, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
 
 stability2$plot
 stability3$plot
+stability4$plot
 # So we choose 2 components
 ```
 
@@ -86,9 +71,43 @@ finalModel = resign(finalModel, mode="C", absorb="B")
 # Plot 4B
 varExp = calculateVarExp(finalModel, processedPloeg$data)
 
+plotlist = plotPARAFACmodel(finalModel, processedPloeg, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+  continuousModes = c(FALSE,FALSE,TRUE),
+  overallTitle = "")
 plotPARAFACmodel(finalModel, processedPloeg, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
   continuousModes = c(FALSE,FALSE,TRUE),
   overallTitle = " ")
+
+newPlotlist = list()
+for(i in 1:6){
+  
+  if(i==3 | i==6){
+    newPlotlist[[i]] = plotlist[[i]] + theme(text=element_text(size=14)) + scale_x_continuous(breaks=1:7,labels=c("-14","0","2","5","9","14","21"))
+  }else{
+    newPlotlist[[i]] = plotlist[[i]] + theme(text=element_text(size=14))
+  }
+  
+}
+
+ggarrange(plotlist=newPlotlist, ncol=3, nrow=2)
+```
+```{r create relabs plot}
+# NOTE: does not filter based on the model yet
+I = dim(vanderPloeg2024$data)[1]
+J = dim(vanderPloeg2024$data)[2]
+K = dim(vanderPloeg2024$data)[3]
+
+countMatrix = matrix(vanderPloeg2024$data, nrow=I)
+newColNames = paste0(rep(vanderPloeg2024$mode2$asv,K), "_t", rep(1:K, each=J))
+colnames(countMatrix) = newColNames
+countMatrix = countMatrix %>% as_tibble() %>% mutate(subject=vanderPloeg2024$mode1$subject) %>% pivot_longer(-subject) %>% mutate(timepoint=as.numeric(str_split_fixed(name,"_t",2)[,2]),id=str_split_fixed(name,"_t",2)[,1]) %>% select(-name) %>% pivot_wider(names_from=id,values_from=value) # shenanigans to create an I*K x J matrix
+countMatrix.numeric = countMatrix %>% select(-subject,-timepoint)
+
+totalSums = rowSums(countMatrix.numeric)
+relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
+
+# Plot 4A
+relAbs %>% mutate(subject=countMatrix$subject, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(vanderPloeg2024$mode1) %>% left_join(vanderPloeg2024$mode2, by=c("name"="asv")) %>% group_by(subject,timepoint,Phylum) %>% summarize(s=sum(value)) %>% left_join(vanderPloeg2024$mode1) %>% ungroup() %>% group_by(RFgroup,Phylum,timepoint) %>% summarize(m=mean(s,na.rm=TRUE)) %>% ungroup() %>% ggplot(aes(x=as.factor(timepoint),y=m,fill=as.factor(Phylum))) + facet_wrap(vars(RFgroup),nrow=3,strip.position="right") + geom_bar(stat="identity") + xlab("Time point [days]") + ylab("Relative abundance") + theme(legend.position="none")
 ```
 
 ```{r plot scatter plots after transformation}
