@@ -24,11 +24,12 @@ continuousModes = c(FALSE,FALSE,TRUE)
 ```
 
 ```{r check sparsity}
-sparsity = calculateSparsity(vanderPloeg2024, considerGroups = TRUE, groupVariable = "RFgroup")
+sparsity = calculateSparsity(vanderPloeg2024, considerGroups = TRUE, groupVariable = "RFgroup") * 100
 
-sparsity[1,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram() + xlab("Sparsity (%)") + ylab("Count") + ggtitle("Low responders")
-sparsity[2,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram() + xlab("Sparsity (%)") + ylab("Count") + ggtitle("Mid responders")
-sparsity[3,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram() + xlab("Sparsity (%)") + ylab("Count") + ggtitle("High responders")
+a=sparsity[1,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(col="black", bins=25) + geom_vline(xintercept=50, col="red", linewidth=1) + xlab("Sparsity (%)") + ylab("Count") + ggtitle("Low responders")
+b=sparsity[2,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(col="black", bins=25) + geom_vline(xintercept=50, col="red", linewidth=1) +xlab("Sparsity (%)") + ylab("Count") + ggtitle("Mid responders")
+c=sparsity[3,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(col="black", bins=25) + geom_vline(xintercept=50, col="red", linewidth=1) +xlab("Sparsity (%)") + ylab("Count") + ggtitle("High responders")
+ggarrange(a,b,c, nrow=1)
 ```
 
 ```{r process the data}
@@ -36,8 +37,8 @@ processedPloeg = processDataCube(vanderPloeg2024, sparsityThreshold=0.5, conside
 ```
 
 ```{r investigate num comp}
-numRepetitions = 25
-assessment = assessNumComponents(processedPloeg$data, minNumComponents=1, maxNumComponents=5, numRepetitions=5, ctol=1e-6, maxit=500, numCores=12)
+numRepetitions = 50
+assessment = assessNumComponents(processedPloeg$data, minNumComponents=1, maxNumComponents=5, numRepetitions=numRepetitions, ctol=1e-6, maxit=500, numCores=12)
 ```
 
 ```{r check the plots}
@@ -46,15 +47,13 @@ assessment$plots$TCC[[3]]
 ```
 
 ```{r model stability}
-numFolds = 25
+numFolds = 50
 
 stability2 = modelStabilityCheck(processedPloeg, numComponents=2, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
 stability3 = modelStabilityCheck(processedPloeg, numComponents=3, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
-stability4 = modelStabilityCheck(processedPloeg, numComponents=4, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
 
 stability2$plot
 stability3$plot
-stability4$plot
 # So we choose 2 components
 ```
 
@@ -91,23 +90,71 @@ for(i in 1:6){
 
 ggarrange(plotlist=newPlotlist, ncol=3, nrow=2)
 ```
+```{r Import red fluorescence data}
+rf_data = read.csv("./vanderPloeg2024/Homogenized data analysis/0. Raw data input/RFdata.csv")
+colnames(rf_data) = c("subject", "id", "fotonr", "day", "group", "RFgroup", "MQH", "SPS(tm)", "Area_delta_R30", "Area_delta_Rmax", "Area_delta_R30_x_Rmax", "gingiva_mean_R_over_G", "gingiva_mean_R_over_G_upper_jaw", "gingiva_mean_R_over_G_lower_jaw")
+rf_data = rf_data %>% as_tibble()
+
+rf_data[rf_data$subject == "VSTPHZ", 1] = "VSTPH2"
+rf_data[rf_data$subject == "D2VZH0", 1] = "DZVZH0"
+rf_data[rf_data$subject == "DLODNN", 1] = "DLODDN"
+rf_data[rf_data$subject == "O3VQFX", 1] = "O3VQFQ"
+rf_data[rf_data$subject == "F80LGT", 1] = "F80LGF"
+rf_data[rf_data$subject == "26QQR0", 1] = "26QQrO"
+
+rf_data2 = read.csv("./vanderPloeg2024/Homogenized data analysis/0. Raw data input/red_fluorescence_data.csv") %>% as_tibble()
+rf_data2 = rf_data2[,c(2,4,181:192)]
+rf_data = rf_data %>% left_join(rf_data2)
+
+rf = rf_data %>% select(subject, RFgroup) %>% unique()
+```
+
+```{r Import subject metadata}
+age_gender = read.csv("./vanderPloeg2024/Homogenized data analysis/0. Raw data input/20160210 demografische gegevens TIFN2.csv", sep=";")
+age_gender = age_gender[2:nrow(age_gender),2:ncol(age_gender)]
+age_gender = age_gender %>% as_tibble() %>% filter(onderzoeksgroep == 0) %>% select(naam, leeftijd, geslacht)
+colnames(age_gender) = c("subject", "age", "gender")
+
+# Correction for incorrect subject ids
+age_gender[age_gender$subject == "VSTPHZ", 1] = "VSTPH2"
+age_gender[age_gender$subject == "D2VZH0", 1] = "DZVZH0"
+age_gender[age_gender$subject == "DLODNN", 1] = "DLODDN"
+age_gender[age_gender$subject == "O3VQFX", 1] = "O3VQFQ"
+age_gender[age_gender$subject == "F80LGT", 1] = "F80LGF"
+age_gender[age_gender$subject == "26QQR0", 1] = "26QQrO"
+
+age_gender = age_gender %>% arrange(subject)
+```
+
+```{r test metadata}
+normalSubjectLoadings = cbind(finalModel$A, processedPloeg$mode1) %>% as_tibble()
+transformedSubjectLoadings = 
+
+# Test against RFgroup (for completeness)
+normalSubjectLoadings %>% select(1,2,RFgroup) %>% pivot_longer(-RFgroup) %>% ggplot(aes(x=as.factor(RFgroup),y=value)) + facet_wrap(vars(name)) + geom_boxplot() + stat_compare_means()
+
+# To test: plaque%, bleeding%, RF%, age, gender
+```
+
 ```{r create relabs plot}
 # NOTE: does not filter based on the model yet
-I = dim(vanderPloeg2024$data)[1]
-J = dim(vanderPloeg2024$data)[2]
-K = dim(vanderPloeg2024$data)[3]
+# Currently scrapped because it adds no value to the paper
 
-countMatrix = matrix(vanderPloeg2024$data, nrow=I)
-newColNames = paste0(rep(vanderPloeg2024$mode2$asv,K), "_t", rep(1:K, each=J))
-colnames(countMatrix) = newColNames
-countMatrix = countMatrix %>% as_tibble() %>% mutate(subject=vanderPloeg2024$mode1$subject) %>% pivot_longer(-subject) %>% mutate(timepoint=as.numeric(str_split_fixed(name,"_t",2)[,2]),id=str_split_fixed(name,"_t",2)[,1]) %>% select(-name) %>% pivot_wider(names_from=id,values_from=value) # shenanigans to create an I*K x J matrix
-countMatrix.numeric = countMatrix %>% select(-subject,-timepoint)
-
-totalSums = rowSums(countMatrix.numeric)
-relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
-
-# Plot 4A
-relAbs %>% mutate(subject=countMatrix$subject, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(vanderPloeg2024$mode1) %>% left_join(vanderPloeg2024$mode2, by=c("name"="asv")) %>% group_by(subject,timepoint,Phylum) %>% summarize(s=sum(value)) %>% left_join(vanderPloeg2024$mode1) %>% ungroup() %>% group_by(RFgroup,Phylum,timepoint) %>% summarize(m=mean(s,na.rm=TRUE)) %>% ungroup() %>% ggplot(aes(x=as.factor(timepoint),y=m,fill=as.factor(Phylum))) + facet_wrap(vars(RFgroup),nrow=3,strip.position="right") + geom_bar(stat="identity") + xlab("Time point [days]") + ylab("Relative abundance") + theme(legend.position="none")
+# I = dim(vanderPloeg2024$data)[1]
+# J = dim(vanderPloeg2024$data)[2]
+# K = dim(vanderPloeg2024$data)[3]
+# 
+# countMatrix = matrix(vanderPloeg2024$data, nrow=I)
+# newColNames = paste0(rep(vanderPloeg2024$mode2$asv,K), "_t", rep(1:K, each=J))
+# colnames(countMatrix) = newColNames
+# countMatrix = countMatrix %>% as_tibble() %>% mutate(subject=vanderPloeg2024$mode1$subject) %>% pivot_longer(-subject) %>% mutate(timepoint=as.numeric(str_split_fixed(name,"_t",2)[,2]),id=str_split_fixed(name,"_t",2)[,1]) %>% select(-name) %>% pivot_wider(names_from=id,values_from=value) # shenanigans to create an I*K x J matrix
+# countMatrix.numeric = countMatrix %>% select(-subject,-timepoint)
+# 
+# totalSums = rowSums(countMatrix.numeric)
+# relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
+# 
+# # Plot 4A
+# relAbs %>% mutate(subject=countMatrix$subject, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(vanderPloeg2024$mode1) %>% left_join(vanderPloeg2024$mode2, by=c("name"="asv")) %>% group_by(subject,timepoint,Phylum) %>% summarize(s=sum(value)) %>% left_join(vanderPloeg2024$mode1) %>% ungroup() %>% group_by(RFgroup,Phylum,timepoint) %>% summarize(m=mean(s,na.rm=TRUE)) %>% ungroup() %>% ggplot(aes(x=as.factor(timepoint),y=m,fill=as.factor(Phylum))) + facet_wrap(vars(RFgroup),nrow=3,strip.position="right") + geom_bar(stat="identity") + xlab("Time point [days]") + ylab("Relative abundance") + theme(legend.position="none")
 ```
 
 ```{r plot scatter plots after transformation}

@@ -8,6 +8,7 @@ date: "2024-03-10"
 library(parafac4microbiome)
 library(tidyverse)
 library(multiway)
+library(ggpubr)
 set.seed(123)
 ```
 
@@ -22,8 +23,8 @@ continuousModes = c(FALSE,FALSE,TRUE)
 ```
 
 ```{r determining a sparsity threshold}
-sparsity = calculateSparsity(Fujita2023)
-sparsity %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(bins=50) + xlab("Sparsity (%)") + ylab("Count")
+sparsity = calculateSparsity(Fujita2023) * 100
+sparsity %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(bins=100, col="black") + xlab("Sparsity (%)") + ylab("Count") + geom_vline(xintercept=99, colour="red", linewidth=1)
 ```
 
 ```{r process the data}
@@ -32,7 +33,7 @@ processedFujita = processDataCube(Fujita2023, sparsityThreshold=0.99, centerMode
 
 ```{r investigate num comp}
 numRepetitions = 50
-assessment = assessNumComponents(processedFujita$data, minNumComponents=1, maxNumComponents=5, numRepetitions=5, ctol=1e-6, maxit=200, numCores=12)
+assessment = assessNumComponents(processedFujita$data, minNumComponents=1, maxNumComponents=5, numRepetitions=numRepetitions, ctol=1e-6, maxit=500, numCores=12)
 ```
 
 ```{r check the plots}
@@ -41,7 +42,7 @@ assessment$plots$overview
 ```
 
 ```{r model stability}
-numFolds = 50
+numFolds = 8
 
 stability3 = modelStabilityCheck(processedFujita, numComponents=3, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes,numCores=12)
 stability4 = modelStabilityCheck(processedFujita, numComponents=4, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes,numCores=12)

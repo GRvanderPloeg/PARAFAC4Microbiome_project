@@ -24,11 +24,11 @@ continuousModes = c(FALSE,FALSE,TRUE)
 ```
 
 ```{r check sparsity}
-sparsity = calculateSparsity(Shao2019, considerGroups=TRUE, groupVariable="Delivery_mode")
+sparsity = calculateSparsity(Shao2019, considerGroups=TRUE, groupVariable="Delivery_mode") * 100
 
-sparsity[1,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram() + xlab("Sparsity (%)") + ylab("Count") + ggtitle("C-section born")
-sparsity[2,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram() + xlab("Sparsity (%)") + ylab("Count") + ggtitle("Vaginally born")
-t(sparsity) %>% as_tibble() %>% ggplot(aes(x=V1,y=V2)) + geom_point()
+a=sparsity[1,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(col="black",bins=50) + xlab("Sparsity (%)") + ylab("Count") + ggtitle("C-section born") + geom_vline(xintercept=90, col="red", linewidth=1)
+b=sparsity[2,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(col="black",bins=50) + xlab("Sparsity (%)") + ylab("Count") + ggtitle("Vaginally born") + geom_vline(xintercept=90, col="red", linewidth=1)
+ggarrange(a,b)
 ```
 
 ```{r process the data}
@@ -36,8 +36,8 @@ processedShao = processDataCube(Shao2019, sparsityThreshold=0.9, considerGroups=
 ```
 
 ```{r investigate num comp}
-numRepetitions = 25
-assessment = assessNumComponents(processedShao$data, minNumComponents=1, maxNumComponents=5, numRepetitions=5, ctol=1e-6, maxit=500, numCores=12)
+numRepetitions = 50
+assessment = assessNumComponents(processedShao$data, minNumComponents=1, maxNumComponents=5, numRepetitions=numRepetitions, ctol=1e-6, maxit=500, numCores=12)
 ```
 
 ```{r check the plots}
@@ -45,16 +45,14 @@ assessment$plots$overview
 ```
 
 ```{r model stability}
-numFolds = 25
+numFolds = 50
 
 stability2 = modelStabilityCheck(processedShao, numComponents=2, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
 stability3 = modelStabilityCheck(processedShao, numComponents=3, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
-stability4 = modelStabilityCheck(processedShao, numComponents=4, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes, numCores=12)
 
 stability2$plot
 stability3$plot
-stability4$plot
-# So we choose 3 components
+# So we choose 2 components
 ```
 
 ```{r select the model}
