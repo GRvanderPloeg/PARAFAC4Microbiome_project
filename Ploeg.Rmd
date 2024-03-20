@@ -128,12 +128,43 @@ age_gender = age_gender %>% arrange(subject)
 
 ```{r test metadata}
 normalSubjectLoadings = cbind(finalModel$A, processedPloeg$mode1) %>% as_tibble()
-transformedSubjectLoadings = 
+transformedSubjectLoadings = correctPARAFACloadings(processedPloeg, finalModel, 2, moreOutput=TRUE)$Ftilde %>% as_tibble() %>% mutate(subject = rep(processedPloeg$mode1$subject, each=7), day = rep(c(-14,0,2,5,9,14,21),41))
 
 # Test against RFgroup (for completeness)
 normalSubjectLoadings %>% select(1,2,RFgroup) %>% pivot_longer(-RFgroup) %>% ggplot(aes(x=as.factor(RFgroup),y=value)) + facet_wrap(vars(name)) + geom_boxplot() + stat_compare_means()
 
-# To test: plaque%, bleeding%, RF%, age, gender
+# Plaque%
+temp=transformedSubjectLoadings %>% left_join(rf_data %>% select(subject, day, plaquepercent))
+cor.test(temp$V1, temp$plaquepercent, method="pearson")
+cor.test(temp$V2, temp$plaquepercent, method="pearson")
+
+# Bleeding%
+temp=transformedSubjectLoadings %>% left_join(rf_data %>% select(subject, day, bomppercent))
+cor.test(temp$V1, temp$bomppercent, method="pearson")
+cor.test(temp$V2, temp$bomppercent, method="pearson")
+
+# RF%
+temp=transformedSubjectLoadings %>% left_join(rf_data %>% select(subject, day, Area_delta_R30))
+cor.test(temp$V1, temp$Area_delta_R30, method="pearson")
+cor.test(temp$V2, temp$Area_delta_R30, method="pearson")
+
+# Gender
+partA = normalSubjectLoadings %>% left_join(age_gender) %>% select(1,2,gender) %>% filter(gender==1)
+partB = normalSubjectLoadings %>% left_join(age_gender) %>% select(1,2,gender) %>% filter(gender==2)
+
+t.test(partA$`1`, partB$`1`) # Not what I would do nowadays, but this is what is in the TIFN paper
+t.test(partA$`2`, partB$`2`)
+
+# Age
+temp = normalSubjectLoadings %>% left_join(age_gender) %>% select(1,2,age)
+cor.test(temp$`1`, temp$age, method="pearson")
+cor.test(temp$`2`, temp$age, method="pearson")
+
+uncorrectedP = c(0.092, 0.0044, 0.007492, 0.0154, 0.2681, 0.184, 1.317e-6, 0.01367, 0.4936, 0.5902, 0.7222, 0.769)
+correctedP = p.adjust(uncorrectedP, "BH")
+
+matrix(uncorrectedP, nrow=2)
+matrix(correctedP, nrow=2)
 ```
 
 ```{r create relabs plot}
@@ -157,14 +188,180 @@ normalSubjectLoadings %>% select(1,2,RFgroup) %>% pivot_longer(-RFgroup) %>% ggp
 # relAbs %>% mutate(subject=countMatrix$subject, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(vanderPloeg2024$mode1) %>% left_join(vanderPloeg2024$mode2, by=c("name"="asv")) %>% group_by(subject,timepoint,Phylum) %>% summarize(s=sum(value)) %>% left_join(vanderPloeg2024$mode1) %>% ungroup() %>% group_by(RFgroup,Phylum,timepoint) %>% summarize(m=mean(s,na.rm=TRUE)) %>% ungroup() %>% ggplot(aes(x=as.factor(timepoint),y=m,fill=as.factor(Phylum))) + facet_wrap(vars(RFgroup),nrow=3,strip.position="right") + geom_bar(stat="identity") + xlab("Time point [days]") + ylab("Relative abundance") + theme(legend.position="none")
 ```
 
-```{r plot scatter plots after transformation}
-correctedA = correctPARAFACloadings(processedPloeg, finalModel, 1)
-correctedB = correctPARAFACloadings(processedPloeg, finalModel, 2)
-correctedC = correctPARAFACloadings(processedPloeg, finalModel, 3)
 
-a=cbind(correctedA, processedPloeg$mode1) %>% as_tibble() %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(RFgroup))) + geom_point() + theme(legend.position="none")
-b=cbind(correctedB, processedPloeg$mode2) %>% as_tibble() %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(Phylum))) + geom_point() + theme(legend.position="none")
-c=cbind(correctedC, processedPloeg$mode3) %>% as_tibble() %>% ggplot(aes(x=`1`,y=`2`)) + geom_point() + geom_path()
+```{r filter features for clustering}
+conLoad = function(X, model, mode){
+  if(mode == 1){
+    Z = multiway::krprod(finalModel$C, finalModel$B)
+    numComponents = 2
+    congruences = matrix(0, nrow=I, ncol=numComponents)
+    
+    for(f in 1:numComponents){
+      vectZ = c(Z[,f])
+      b = finalModel$B[,f]
+      c = finalModel$C[,f]
+      
+      for(i in 1:I){
+        Xi = processedPloeg$data[i,,]
+        vectX = c(Xi)
+        congruences[i,f] = multiway::congru(vectZ, vectX)
+      }
+    }
+  }
+  else if(mode == 2){
+    Z = multiway::krprod(finalModel$C, finalModel$A)
+    numComponents = 2
+    congruences = matrix(0, nrow=J, ncol=numComponents)
+    
+    for(f in 1:numComponents){
+      vectZ = c(Z[,f])
+      for(j in 1:J){
+        vectX = c(processedPloeg$data[,j,])
+        congruences[j,f] = multiway::congru(vectZ, vectX)
+      }
+    }
+  }
+  else if(mode == 3){
+    Z = multiway::krprod(finalModel$B, finalModel$A)
+    numComponents = 2
+    congruences = matrix(0, nrow=K, ncol=numComponents)
+    
+    for(f in 1:numComponents){
+      vectZ = c(Z[,f])
+      for(k in 1:K){
+        vectX = c(processedPloeg$data[,,k])
+        congruences[k,f] = multiway::congru(vectZ, vectX)
+      }
+    }
+  }
+  return(congruences)
+}
 
-ggarrange(a,b,c, nrow=1)
+# Lazy solution to getting a long matrix
+I = dim(processedPloeg$data)[1]
+J = dim(processedPloeg$data)[2]
+K = dim(processedPloeg$data)[3]
+X_long = processedPloeg$data[,,1]
+for(k in 2:K){
+  X_long = rbind(X_long, processedPloeg$data[,,k])
+}
+X_wide = matrix(processedPloeg$data, I, J*K)
+Xhat = reinflateBlock(finalModel)
+
+# Determine variance explained
+featuresVarExp = 1:dim(Xhat)[2]
+modelVarExp = varExp
+
+for(i in 1:dim(Xhat)[2]){
+  featuresVarExp[i] = multiway::sumsq(Xhat[,i,], na.rm=TRUE) / multiway::sumsq(processedPloeg$data[,i,], na.rm=TRUE)
+}
+
+# Determine congruence
+featureCongruences = conLoad(processedPloeg$data, finalModel, 2)
+
+# Establish feature mask
+varExpThreshold = modelVarExp
+congruenceThreshold = 0.4
+featureMask = (featuresVarExp >= varExpThreshold) | (rowSums(featureCongruences>=congruenceThreshold) >= 1)
+```
+
+```{r cluster features based on modelled data}
+library(cluster)
+library(factoextra)
+
+Xhat_filtered = Xhat[,featureMask,]
+
+I = dim(Xhat_filtered)[1]
+J = dim(Xhat_filtered)[2]
+K = dim(Xhat_filtered)[3]
+
+# Lazy solution to getting a long matrix
+Xhat_filtered_long = Xhat_filtered[,,1]
+for(k in 2:K){
+  Xhat_filtered_long = rbind(Xhat_filtered_long, Xhat_filtered[,,k])
+}
+
+# Clustering diagnostics
+a = fviz_nbclust(t(Xhat_filtered_long), pam, method="wss")
+b = fviz_nbclust(t(Xhat_filtered_long), pam, method="silhouette")
+c = fviz_nbclust(t(Xhat_filtered_long), pam, method="gap_stat")
+ggarrange(a,b,c, nrow=3)
+
+# Cluster
+set.seed(1)
+numClusters = 3
+clusteringResult = pam(t(Xhat_filtered_long), numClusters, nstart=50)
+result = processedPloeg$mode2[featureMask,] %>% as_tibble() %>% mutate(cluster=clusteringResult$clustering)
+
+clusteredFeatures = cbind(correctPARAFACloadings(processedPloeg, finalModel, 2), processedPloeg$mode2) %>% as_tibble() %>% left_join(result)
+clusteredFeatures %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(cluster))) + geom_point() + xlab("Feature mode, component 1 (transformed)") + ylab("Feature mode, component 2 (transformed)") + scale_color_manual(name = "Cluster", labels=c("1","2","3","Not clustered"), values=c("#F8766D","#00BA38","#619CFF"))
+```
+```{r relabs plots of clusters}
+microbiome.raw = read.csv("./vanderPloeg2024/Homogenized data analysis/0. Raw data input/20221005_wp2/count-table.tsv", sep="\t")
+taxa = read.csv("./vanderPloeg2024/Homogenized data analysis/0. Raw data input/20221005_wp2/taxonomic-classification.tsv", sep="\t")
+selectedIndividuals = microbiome.raw %>% as_tibble() %>% filter(group == "control") %>% select(subject) %>% pull %>% unique
+
+countData = microbiome.raw %>% as_tibble() %>% filter(niche == "upper jaw, lingual", group == "control")
+countData.numeric = countData %>% select(-sample,-subject,-visit,-group,-niche)
+relAbs = sweep(countData.numeric, 1, rowSums(countData.numeric), FUN="/")
+timepoints = c(-14,0,2,5,9,14,21)
+
+relAbs %>% as_tibble() %>% mutate(subject=countData$subject,timepoint=timepoints[countData$visit]) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(rf) %>% left_join(clusteredFeatures, by=c("name"="asv")) %>% filter(cluster != "NA") %>% select(subject,timepoint,cluster,name,RFgroup,value) %>% group_by(subject,timepoint,cluster) %>% summarize(s=sum(value)) %>% left_join(rf) %>% ungroup() %>% filter(RFgroup != 1) %>% group_by(RFgroup,timepoint,cluster) %>% summarize(m=mean(s,na.rm=TRUE),v=plotrix::std.error(s,na.rm=TRUE)) %>% ungroup() %>% ggplot(aes(x=as.factor(timepoint),y=m,col=as.factor(RFgroup),group=as.factor(RFgroup))) + facet_grid(cols=vars(cluster)) + geom_line() + geom_errorbar(aes(ymax=m+v,ymin=m-v,width=.2)) + geom_point() + theme(legend.position="none",text=element_text(size=14)) + xlab("Time point [days]") + ylab("Sum of ASVs per group (mean +/- SEM)")
+```
+
+```{r permutation testing of the relabs}
+featureClustering = clusteredFeatures %>% mutate(group = cluster) %>% select(-cluster)
+
+ASVgroupPermutationTest = function(nicheName, featureClustering, visitNumber, groupNumber, numPermutations){
+  microbiome.numeric = microbiome.raw %>% as_tibble() %>% filter(group=="control", niche==nicheName, visit==visitNumber)
+  microbiome.meta = microbiome.numeric %>% select(subject)
+  microbiome.numeric = microbiome.numeric %>% select(-sample,-subject,-visit,-group,-niche)
+  totalSums = rowSums(microbiome.numeric)
+  relativeAbundances = sweep(microbiome.numeric, 1, totalSums, FUN="/") %>% as_tibble() %>% mutate(subject = microbiome.meta$subject)
+
+  df = relativeAbundances %>%
+    select(all_of(c(featureClustering$asv, "subject"))) %>%
+    pivot_longer(-subject) %>%
+    left_join(featureClustering, by=c("name"="asv")) %>%
+    group_by(subject, group) %>%
+    summarize(s=sum(value), .groups="drop") %>%
+    ungroup() %>%
+    left_join(rf, by="subject") %>%
+    filter(group == groupNumber)
+
+  dfA = df %>% filter(RFgroup==0) %>% select(s) %>% pull()
+  dfB = df %>% filter(RFgroup==2) %>% select(s) %>% pull()
+  #realResult = wilcox.test(dfA, dfB)$p.value
+  realResult = mean(dfA) - mean(dfB)
+
+  # Permutations
+  set.seed(1)
+  permutedResults = 1:numPermutations
+  for(i in 1:numPermutations){
+    dfA = df %>% mutate(RFgroup = sample(RFgroup)) %>% filter(RFgroup==0) %>% select(s) %>% pull()
+    dfB = df %>% mutate(RFgroup = sample(RFgroup)) %>% filter(RFgroup==2) %>% select(s) %>% pull()
+    #permutedResults[i] = wilcox.test(dfA, dfB)$p.value
+    permutedResults[i] = mean(dfA) - mean(dfB)
+  }
+
+  Zscore = abs(realResult - mean(permutedResults)) / sd(permutedResults)
+
+  if (realResult < 0){
+    pvalue = sum(permutedResults < realResult) / numPermutations
+  }
+  else{
+    pvalue = sum(permutedResults > realResult) / numPermutations
+  }
+
+  return(list(realResult, permutedResults, mean(permutedResults), median(permutedResults), sd(permutedResults), Zscore, pvalue))
+}
+
+for(visit in 1:7){
+  for(cluster in 1:3){
+    print(paste0("VISIT: ",visit))
+    print(paste0("CLUSTER: ",cluster))
+    print(ASVgroupPermutationTest("upper jaw, lingual", featureClustering, visit, cluster, 999)[[7]])
+    print("-------------------------")
+  }
+}
 ```
