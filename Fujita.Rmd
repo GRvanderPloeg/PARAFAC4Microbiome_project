@@ -66,10 +66,10 @@ finalModel = resign(finalModel, mode="B", absorb="A")
 # Plot 2B
 varExp = calculateVarExp(finalModel, processedFujita$data)
 
-plotlist = plotPARAFACmodel(finalModel, processedFujita, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+plotlist = plotPARAFACmodel(finalModel, processedFujita, 3, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
                  continuousModes = c(FALSE,FALSE,TRUE),
                  overallTitle = "")
-plotPARAFACmodel(finalModel, processedFujita, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+plotPARAFACmodel(finalModel, processedFujita, 3, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
                  continuousModes = c(FALSE,FALSE,TRUE),
                  overallTitle = " ")
 
