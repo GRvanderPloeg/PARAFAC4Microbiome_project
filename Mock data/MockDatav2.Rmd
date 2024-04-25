@@ -1,0 +1,201 @@
+---
+title: "MockData"
+author: "G.R. van der Ploeg"
+date: "2/20/2023"
+output: html_document
+---
+
+```{r libraries}
+library(ggplot2)
+library(tidyverse)
+library(ggrepel)
+library(ggpubr)
+library(paramGUI)
+library(pracma)
+library(plotly)
+library(cowplot)
+library(multiblock)
+
+source("../../N-way-shell-R/summary.functions.R")
+source("../../N-way-shell-R/PARAFAC_functions.R")
+source("../../N-way-shell-R/heatmap.2a.R")
+source("../../N-way-shell-R/plotfunctions.R")
+source("../Roel_sim_functions.R")
+set.seed(0)
+```
+
+```{r set cube size}
+I = 100
+J = 3
+K = 10
+```
+
+```{r create scores}
+
+partA = abs(rnorm(I/2, mean=0.02, sd=0.01))
+partB = rnorm(I/2, mean=0.2, sd=0.01)
+empty = rnorm(I/2, mean=0, sd=0.025)
+#partB = seq(0.06, 0.12, length.out=I/2) + abs(rnorm(I/2, mean=0, sd=0.001))
+#partC = seq(0.08, 0.12, length.out=I/2) + abs(rnorm(I/2, mean=0, sd=0.001))
+
+# Component 1
+t1 = c(partB, -partB)
+
+# Component 2
+t2 = c(seq(from=-0.2, to=-0.02, length.out=I/2), seq(from=0.02, to=0.2, length.out=I/2))
+
+t1 %>% as_tibble() %>% mutate(index=1:nrow(.),phenotype=c(rep(1,I/2),rep(2,I/2))) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity")
+t2 %>% as_tibble() %>% mutate(index=1:nrow(.),phenotype=c(rep(1,I/2),rep(2,I/2))) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity")
+```
+
+```{r create loadings}
+#p1 = createBinaryLoading(nonzeroIndices=10, length=J)
+#p2 = createBinaryLoading(nonzeroIndices=20, length=J)
+
+p1 = c(-0.05, 0.05, 0.8)
+p1 = p1 / norm(as.matrix(p1),"2")
+
+p2 = c(0.8, -0.05, 0.05)
+p2 = p2 / norm(as.matrix(p2),"2")
+
+p1 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_bar(stat="identity")
+p2 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_bar(stat="identity")
+```
+
+```{r create time profiles}
+k1 = (1:10)^3 #2^(1:10) #exp(1:10)
+k1 = k1 / norm(as.matrix(k1), "2")
+k2 = sigmoid(-5:5) / norm(sigmoid(-5:5),"2") + 0.5
+k2 = k2[-6]
+
+k1 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_line()
+k2 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=value)) + geom_line()
+```
+
+```{r create the dataset}
+signalToNoiseRatio = 0.5
+
+pattern1 = t1 %*% t(p1)
+pattern2 = t2 %*% t(p2)
+
+X = array(0L, dim=c(I, J, K))
+
+for(k in 1:K){
+  X[,,k] = pattern1*k1[k] + pattern2*k2[k]
+}
+
+# Add error
+# X = X / sqrt(sum(X^2)) # scales to ssq 1
+# 
+# E = array(abs(rnorm(I*J*K)), dim=c(I,J,K))
+# E = E / sqrt(sum(E^2)) * signalToNoiseRatio
+# X = X + E
+
+# Center across subject mode
+X_cnt = X
+for(i in 1:I){
+  for(k in 1:K){
+    X_cnt[i,,k] = X[i,,k] - mean(X[i,,k])
+  }
+}
+
+# Scale within feature mode
+X_cnt_scl = X_cnt
+for(i in 1:I){
+  X_cnt_scl[i,,] = X_cnt[i,,] / sd(X_cnt[i,,])
+}
+
+```
+
+```{r plot per phylum}
+# Convert to flat array
+flat = matrix(0L, nrow=I*K, ncol=J)
+
+iterator = 1
+for(i in 1:I){
+  for(k in 1:K){
+    flat[iterator,] = X[i,,k]
+    iterator = iterator + 1
+  }
+}
+
+flat %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% ggplot(aes(x=as.factor(timepoint),y=value,col=as.factor(subject),group=subject)) + facet_wrap(vars(name)) + geom_line()
+```
+```{r phenotype plot}
+design = cbind(1:I, c(rep(1,I/2), rep(2,I/2))) %>% as_tibble()
+colnames(design) = c("subject", "phenotype")
+
+fakeCounts = round(flat * 1000)
+fakeCounts = fakeCounts + abs(min(fakeCounts)) # "pseudocount"
+fakeCounts[1:500,1] = fakeCounts[1:500,1] # red in condition 1
+fakeCounts[501:1000,1] = fakeCounts[501:1000,1] # red in condition 2
+fakeCounts[1:500,2] = fakeCounts[1:500,2] # green in condition 1
+fakeCounts[501:1000,2] = fakeCounts[501:1000,2] # green in condition 2
+fakeCounts[1:500,3] = fakeCounts[1:500,3] # blue in condition 1
+fakeCounts[501:1000,3] = fakeCounts[501:1000,3] -50# blue in condition 2
+
+flat %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(design) %>% group_by(phenotype,timepoint,name) %>% summarise(m=mean(value),s=sd(value)) %>% ggplot(aes(x=as.factor(timepoint),y=m,col=as.factor(name))) + facet_wrap(vars(phenotype)) + geom_point() + geom_errorbar(aes(ymin=m-s,ymax=m+s))
+
+fakeCounts %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(design) %>% group_by(phenotype,timepoint,name) %>% summarise(m=mean(value),s=sd(value)) %>% ggplot(aes(x=as.factor(timepoint),y=m,col=as.factor(name))) + facet_wrap(vars(phenotype)) + geom_point() + geom_errorbar(aes(ymin=m-s,ymax=m+s))
+```
+
+```{r rel abs plot}
+library(scales)
+#show_col(hue_pal()(5))
+
+relAbs = sweep(fakeCounts, 1, rowSums(fakeCounts), FUN="/")
+
+relAbs %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% filter(subject %in% c(1,99)) %>% mutate(case_control = c(rep("Case", 30), rep("Control", 30))) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(name))) + facet_wrap(vars(case_control), nrow=I) + geom_bar(stat="identity", col="black") + scale_fill_manual(name="Phylum", labels=c("Actinobacteria", "Bacteroidetes", "Proteobacteria"), values=c("#A3A500", "#E76BF3", "#00BF7D")) + ylab("Relative abundance") + xlab("Time point") + theme(text=element_text(size=14))
+
+relAbs %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% filter(subject %in% c(1,99)) %>% mutate(case_control = c(rep("Cases", 30), rep("Controls", 30))) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(name))) + facet_wrap(vars(case_control), nrow=I) + geom_bar(stat="identity", col="black") + scale_fill_manual(name="Phylum", labels=c("Actinobacteria", "Bacteroidetes", "Proteobacteria"), values=c("#A3A500", "#E76BF3", "#00BF7D")) + ylab("Relative abundance") + xlab("Time point") + theme(legend.position="none", text=element_text(size=14))
+```
+
+```{r check the model}
+library(multiway)
+library(scales)
+# model = parafac(X, 2, nstart=100)
+# 
+# # The model
+# empty = ggplot() + theme_void()
+# a=model$A %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V1)) + geom_bar(stat="identity")
+# b=model$A %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V2)) + geom_bar(stat="identity")
+# c=model$B %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V1)) + geom_bar(stat="identity")
+# d=model$B %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V2)) + geom_bar(stat="identity")
+# e=model$C %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V1)) + geom_bar(stat="identity")
+# f=model$C %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V2)) + geom_bar(stat="identity")
+# ggarrange(a,b,c,d,e,f)
+
+# Real
+g=t1 %>% as_tibble() %>% mutate(index=1:nrow(.),subject=1:nrow(.)) %>% left_join(design) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity") + theme(legend.position="none",text=element_text(size=14)) + ylab("Component 1 loading") + xlab("")
+j=t2 %>% as_tibble() %>% mutate(index=1:nrow(.),subject=1:nrow(.)) %>% left_join(design) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity") + theme(legend.position="none",text=element_text(size=14)) + ylab("Component 2 loading") + xlab("Subject index")
+h=p1 %>% as_tibble() %>% mutate(index=1:nrow(.),phylum=c("Actinobacteria", "Bacteroidetes", "Proteobacteria")) %>% ggplot(aes(x=index,y=value,fill=as.factor(phylum))) + geom_bar(stat="identity") + ylab("") + xlab("") + scale_fill_manual(name="Phylum", labels=c("Actinobacteria", "Bacteroidetes", "Proteobacteria"), values=c("#A3A500", "#E76BF3", "#00BF7D"))+ theme(legend.position="none",text=element_text(size=14))
+k=p2 %>% as_tibble() %>% mutate(index=1:nrow(.),phylum=c("Actinobacteria", "Bacteroidetes", "Proteobacteria")) %>% ggplot(aes(x=index,y=value,fill=as.factor(phylum))) + geom_bar(stat="identity") + ylab("") + xlab("Feature index") + scale_fill_manual(name="Phylum", labels=c("Actinobacteria", "Bacteroidetes", "Proteobacteria"), values=c("#A3A500", "#E76BF3", "#00BF7D"))+ theme(legend.position="none",text=element_text(size=14))
+i=k1 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=as.factor(index),y=value)) + geom_bar(stat="identity") + theme(legend.position="none",text=element_text(size=14))+ ylab("") + xlab("")
+l=(k2-0.5) %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=as.factor(index),y=value)) + geom_bar(stat="identity") + theme(legend.position="none",text=element_text(size=14))+ ylab("") + xlab("Time point")
+ggarrange(g,h,i,j,k,l)
+
+t1 %>% as_tibble() %>% mutate(index=1:nrow(.),subject=1:nrow(.)) %>% left_join(design) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity") + theme(legend.position="right",text=element_text(size=14)) + ylab("Component 1") + xlab("") + scale_fill_manual(name="Subject group", values=hue_pal()(2), labels=c("Case", "Control"))
+```
+
+```{r pca}
+library(vegan)
+library(ape)
+library(ggrepel)
+
+d = vegdist(fakeCounts, method="bray")
+d2 = vegdist(fakeCounts+1, method="aitchison")
+BC_pcoa = pcoa(d)
+A_pcoa = pcoa(d2)
+
+a=BC_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% left_join(design) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(phenotype))) + geom_point()
+b=BC_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point()
+ggarrange(a,b)
+
+c=A_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% left_join(design) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(phenotype))) + geom_point() + scale_color_manual(name="Subject group", labels=c("Case", "Control"), values=c("#F8766D", "#00B0F6")) + xlab("PCoA Component 1 (95%)") + ylab("PCoA Component 2 (5%)") + theme(text=element_text(size=14))
+c = c + theme(legend.position="none", text=element_text(size=14))
+d=A_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point() + xlab("PCoA Component 1 (95%)") + ylab("PCoA Component 2 (5%)") + theme(legend.position="top")
+d = d + theme(legend.position="none", text=element_text(size=14))
+ggarrange(c,d, nrow=2)
+
+A_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% left_join(design) %>% ggplot(aes(x=Axis.1, y=Axis.2, shape=as.factor(phenotype), col=as.factor(timepoint))) + geom_point(size=3) + xlab("PCoA Component 1 (95%)") + ylab("PCoA Component 2 (5%)") + scale_color_discrete(name="Time point") + scale_shape_manual(name="Phenotype", labels=c("Case","Control"), values=16:17) + theme(text=element_text(size=14))
+```

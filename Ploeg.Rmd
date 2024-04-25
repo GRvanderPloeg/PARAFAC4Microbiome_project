@@ -75,10 +75,10 @@ finalModel = readRDS("./Ploeg2024.RDS")
 # Plot 4B
 varExp = calculateVarExp(finalModel, processedPloeg$data)
 
-plotlist = plotPARAFACmodel(finalModel, processedPloeg, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+plotlist = plotPARAFACmodel(finalModel, processedPloeg, 2, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
   continuousModes = c(FALSE,FALSE,TRUE),
   overallTitle = "")
-plotPARAFACmodel(finalModel, processedPloeg, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+plotPARAFACmodel(finalModel, processedPloeg, 2, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
   continuousModes = c(FALSE,FALSE,TRUE),
   overallTitle = " ")
 
@@ -133,7 +133,7 @@ age_gender = age_gender %>% arrange(subject)
 
 ```{r test metadata}
 normalSubjectLoadings = cbind(finalModel$A, processedPloeg$mode1) %>% as_tibble()
-transformedSubjectLoadings = correctPARAFACloadings(processedPloeg, finalModel, 2, moreOutput=TRUE)$Ftilde %>% as_tibble() %>% mutate(subject = rep(processedPloeg$mode1$subject, each=7), day = rep(c(-14,0,2,5,9,14,21),41))
+transformedSubjectLoadings = transformPARAFACloadings(finalModel, 2, moreOutput=TRUE)$Ftilde %>% as_tibble() %>% mutate(subject = rep(processedPloeg$mode1$subject, each=7), day = rep(c(-14,0,2,5,9,14,21),41))
 
 # Test against RFgroup (for completeness)
 normalSubjectLoadings %>% select(1,2,RFgroup) %>% pivot_longer(-RFgroup) %>% ggplot(aes(x=as.factor(RFgroup),y=value)) + facet_wrap(vars(name)) + geom_boxplot() + stat_compare_means()
@@ -298,8 +298,13 @@ numClusters = 3
 clusteringResult = pam(t(Xhat_filtered_long), numClusters, nstart=50)
 result = processedPloeg$mode2[featureMask,] %>% as_tibble() %>% mutate(cluster=clusteringResult$clustering)
 
-clusteredFeatures = cbind(correctPARAFACloadings(processedPloeg, finalModel, 2), processedPloeg$mode2) %>% as_tibble() %>% left_join(result)
+clusteredFeatures = cbind(transformPARAFACloadings(finalModel, 2), processedPloeg$mode2) %>% as_tibble() %>% left_join(result) %>% mutate(name = paste0(Genus, " ", Species))
+clusteredFeatures[is.na(clusteredFeatures$cluster),"name"] = NA
+clusteredFeatures[is.na(clusteredFeatures$Genus),"name"] = NA
+clusteredFeatures[is.na(clusteredFeatures$Species),"name"] = NA
 clusteredFeatures %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(cluster))) + geom_point() + xlab("Feature mode, component 1 (transformed)") + ylab("Feature mode, component 2 (transformed)") + scale_color_manual(name = "Cluster", labels=c("1","2","3","Not clustered"), values=c("#F8766D","#00BA38","#619CFF")) + theme(legend.position="bottom",text=element_text(size=14))
+
+clusteredFeatures %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(cluster), label=name)) + geom_point(size=3) + xlab("Feature mode, component 1 (transformed)") + ylab("Feature mode, component 2 (transformed)") + scale_color_manual(name = "Cluster", labels=c("1","2","3","Not clustered"), values=c("#F8766D","#00BA38","#619CFF")) + theme(legend.position="bottom",text=element_text(size=14)) + geom_text_repel()
 ```
 ```{r relabs plots of clusters}
 microbiome.raw = read.csv("./vanderPloeg2024/Homogenized data analysis/0. Raw data input/20221005_wp2/count-table.tsv", sep="\t")
