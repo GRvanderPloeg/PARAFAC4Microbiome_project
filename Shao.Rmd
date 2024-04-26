@@ -68,10 +68,10 @@ finalModel = resign(finalModel, mode="C", absorb="B")
 # Plot 4B
 varExp = calculateVarExp(finalModel, processedShao$data)
 
-plotlist = plotPARAFACmodel(finalModel, processedShao, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+plotlist = plotPARAFACmodel(finalModel, processedShao, 2, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
   continuousModes = c(FALSE,FALSE,TRUE),
   overallTitle = "")
-plotPARAFACmodel(finalModel, processedShao, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+plotPARAFACmodel(finalModel, processedShao, 2, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
   continuousModes = c(FALSE,FALSE,TRUE),
   overallTitle = " ")
 
@@ -111,7 +111,7 @@ relAbs %>% mutate(subject=countMatrix$subject, timepoint=countMatrix$timepoint) 
 ```
 
 ```{r test metadata}
-sampleMeta = read.csv("./Shao2019/Data/sampleMetadata.csv", skip=2) %>% as_tibble()
+sampleMeta = read.csv("./Data/Shao_sampleMetadata.csv", skip=2) %>% as_tibble()
 subjectLoadings = cbind(finalModel$A, processedShao$mode1) %>% as_tibble() %>% left_join(sampleMeta)
 
 subjectLoadings %>% select(1, 2, Delivery_mode) %>% pivot_longer(-Delivery_mode) %>% ggplot(aes(x=Delivery_mode,y=value)) + facet_wrap(vars(name)) + geom_boxplot() + stat_compare_means()
@@ -126,6 +126,7 @@ subjectLoadings %>% select(1,2, Abx_Baby_after_hospital) %>% pivot_longer(-Abx_B
 
 subjectLoadings %>% select(1,2, Bacteroides_profile) %>% pivot_longer(-Bacteroides_profile) %>% filter(Bacteroides_profile != "NA") %>% ggplot(aes(x=Bacteroides_profile,y=value)) + facet_wrap(vars(name)) + geom_boxplot() + stat_compare_means()
 
+# Uncorrected Pvalues are copied over from the figures above
 uncorrectedP = c(0.14, 2.2e-16, 0.000016, 0.059, 0.16, 0.9, 1.3e-08, 0.24, 0.75, 0.7, 0.01, 2.2e-16)
 correctedP = p.adjust(uncorrectedP, "BH")
 
