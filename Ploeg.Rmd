@@ -278,8 +278,9 @@ clusteredFeatures[is.na(clusteredFeatures$Genus),"name"] = NA
 clusteredFeatures[is.na(clusteredFeatures$Species),"name"] = NA
 clusteredFeatures %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(cluster))) + geom_point() + xlab("Feature mode, component 1 (transformed)") + ylab("Feature mode, component 2 (transformed)") + scale_color_manual(name = "Cluster", labels=c("1","2","3","Not clustered"), values=c("#F8766D","#00BA38","#619CFF")) + theme(legend.position="bottom",text=element_text(size=14))
 
-clusteredFeatures %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(cluster), label=name)) + geom_point(size=3) + xlab("Feature mode, component 1 (transformed)") + ylab("Feature mode, component 2 (transformed)") + scale_color_manual(name = "Cluster", labels=c("1","2","3","Not clustered"), values=c("#F8766D","#00BA38","#619CFF")) + theme(legend.position="bottom",text=element_text(size=14)) + geom_text_repel()
+clusteredFeatures %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(cluster), label=name)) + geom_point(size=3) + xlab("Feature mode, component 1 (transformed)") + ylab("Feature mode, component 2 (transformed)") + scale_color_manual(name = "Cluster", labels=c("1","2","3","Not clustered"), values=c("#B385FF","#E58700","#7CAE00")) + theme(legend.position="none",text=element_text(size=14)) + geom_text_repel()
 ```
+
 ```{r relabs plots of clusters}
 microbiome.raw = read.csv("./Data/Ploeg_count-table.tsv", sep="\t")
 taxa = read.csv("./Data/Ploeg_taxonomic-classification.tsv", sep="\t")

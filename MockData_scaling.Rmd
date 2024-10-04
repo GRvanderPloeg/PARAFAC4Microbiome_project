@@ -23,7 +23,7 @@ set.seed(0)
 ```
 
 ```{r set cube size}
-I = 50
+I = 100
 J = 3
 K = 10
 ```
@@ -120,16 +120,14 @@ flat %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>
 design = cbind(1:I, c(rep(1,I/2), rep(2,I/2))) %>% as_tibble()
 colnames(design) = c("subject", "phenotype")
 
-IK = I * K
-
 fakeCounts = round(flat * 1000)
 fakeCounts = fakeCounts + abs(min(fakeCounts)) # "pseudocount"
-fakeCounts[1:(IK/2),1] = fakeCounts[1:(IK/2),1] # red in condition 1
-fakeCounts[(IK/2+1):IK,1] = fakeCounts[(IK/2+1):IK,1] # red in condition 2
-fakeCounts[1:(IK/2),2] = fakeCounts[1:(IK/2),2] # green in condition 1
-fakeCounts[(IK/2+1):IK,2] = fakeCounts[(IK/2+1):IK,2] # green in condition 2
-fakeCounts[1:(IK/2),3] = fakeCounts[1:(IK/2),3] # blue in condition 1
-fakeCounts[(IK/2+1):IK,3] = fakeCounts[(IK/2+1):IK,3] -50# blue in condition 2
+fakeCounts[1:500,1] = fakeCounts[1:500,1] # red in condition 1
+fakeCounts[501:1000,1] = fakeCounts[501:1000,1] # red in condition 2
+fakeCounts[1:500,2] = fakeCounts[1:500,2] # green in condition 1
+fakeCounts[501:1000,2] = fakeCounts[501:1000,2] # green in condition 2
+fakeCounts[1:500,3] = fakeCounts[1:500,3] # blue in condition 1
+fakeCounts[501:1000,3] = fakeCounts[501:1000,3] -50# blue in condition 2
 
 flat %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% left_join(design) %>% group_by(phenotype,timepoint,name) %>% summarise(m=mean(value),s=sd(value)) %>% ggplot(aes(x=as.factor(timepoint),y=m,col=as.factor(name))) + facet_wrap(vars(phenotype)) + geom_point() + geom_errorbar(aes(ymin=m-s,ymax=m+s))
 
@@ -142,9 +140,9 @@ library(scales)
 
 relAbs = sweep(fakeCounts, 1, rowSums(fakeCounts), FUN="/")
 
-relAbs %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% filter(subject %in% c(1,(I-1))) %>% mutate(case_control = c(rep("Case", 30), rep("Control", 30))) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(name))) + facet_wrap(vars(case_control), nrow=I) + geom_bar(stat="identity", col="black") + scale_fill_manual(name="Phylum", labels=c("Actinobacteria", "Bacteroidetes", "Proteobacteria"), values=c("#A3A500", "#E76BF3", "#00BF7D")) + ylab("Relative abundance") + xlab("Time point") + theme(text=element_text(size=14))
+relAbs %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% filter(subject %in% c(1,99)) %>% mutate(case_control = c(rep("Case", 30), rep("Control", 30))) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(name))) + facet_wrap(vars(case_control), nrow=I) + geom_bar(stat="identity", col="black") + scale_fill_manual(name="Phylum", labels=c("Actinobacteria", "Bacteroidetes", "Proteobacteria"), values=c("#A3A500", "#E76BF3", "#00BF7D")) + ylab("Relative abundance") + xlab("Time point") + theme(text=element_text(size=14))
 
-relAbs %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% filter(subject %in% c(1,(I-1))) %>% mutate(case_control = c(rep("Cases", 30), rep("Controls", 30))) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(name))) + facet_wrap(vars(case_control), nrow=I) + geom_bar(stat="identity", col="black") + scale_fill_manual(name="Phylum", labels=c("Actinobacteria", "Bacteroidetes", "Proteobacteria"), values=c("#A3A500", "#E76BF3", "#00BF7D")) + ylab("Relative abundance") + xlab("Time point") + theme(legend.position="none", text=element_text(size=14))
+relAbs %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% pivot_longer(-c(subject,timepoint)) %>% filter(subject %in% c(1,99)) %>% mutate(case_control = c(rep("Cases", 30), rep("Controls", 30))) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(name))) + facet_wrap(vars(case_control), nrow=I) + geom_bar(stat="identity", col="black") + scale_fill_manual(name="Phylum", labels=c("Actinobacteria", "Bacteroidetes", "Proteobacteria"), values=c("#A3A500", "#E76BF3", "#00BF7D")) + ylab("Relative abundance") + xlab("Time point") + theme(legend.position="none", text=element_text(size=14))
 ```
 
 ```{r check the model}
@@ -163,8 +161,8 @@ library(scales)
 # ggarrange(a,b,c,d,e,f)
 
 # Real
-g=t1 %>% as_tibble() %>% mutate(index=1:nrow(.),subject=1:nrow(.)) %>% left_join(design) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity",width=1.05) + theme(legend.position="none",text=element_text(size=14)) + ylab("Component 1 loading") + xlab("")
-j=t2 %>% as_tibble() %>% mutate(index=1:nrow(.),subject=1:nrow(.)) %>% left_join(design) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity",width=1.05) + theme(legend.position="none",text=element_text(size=14)) + ylab("Component 2 loading") + xlab("Subject index")
+g=t1 %>% as_tibble() %>% mutate(index=1:nrow(.),subject=1:nrow(.)) %>% left_join(design) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity") + theme(legend.position="none",text=element_text(size=14)) + ylab("Component 1 loading") + xlab("")
+j=t2 %>% as_tibble() %>% mutate(index=1:nrow(.),subject=1:nrow(.)) %>% left_join(design) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity") + theme(legend.position="none",text=element_text(size=14)) + ylab("Component 2 loading") + xlab("Subject index")
 h=p1 %>% as_tibble() %>% mutate(index=1:nrow(.),phylum=c("Actinobacteria", "Bacteroidetes", "Proteobacteria")) %>% ggplot(aes(x=index,y=value,fill=as.factor(phylum))) + geom_bar(stat="identity") + ylab("") + xlab("") + scale_fill_manual(name="Phylum", labels=c("Actinobacteria", "Bacteroidetes", "Proteobacteria"), values=c("#A3A500", "#E76BF3", "#00BF7D"))+ theme(legend.position="none",text=element_text(size=14))
 k=p2 %>% as_tibble() %>% mutate(index=1:nrow(.),phylum=c("Actinobacteria", "Bacteroidetes", "Proteobacteria")) %>% ggplot(aes(x=index,y=value,fill=as.factor(phylum))) + geom_bar(stat="identity") + ylab("") + xlab("Feature index") + scale_fill_manual(name="Phylum", labels=c("Actinobacteria", "Bacteroidetes", "Proteobacteria"), values=c("#A3A500", "#E76BF3", "#00BF7D"))+ theme(legend.position="none",text=element_text(size=14))
 i=k1 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=as.factor(index),y=value)) + geom_bar(stat="identity") + theme(legend.position="none",text=element_text(size=14))+ ylab("") + xlab("")
@@ -174,62 +172,126 @@ ggarrange(g,h,i,j,k,l)
 t1 %>% as_tibble() %>% mutate(index=1:nrow(.),subject=1:nrow(.)) %>% left_join(design) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity") + theme(legend.position="right",text=element_text(size=14)) + ylab("Component 1") + xlab("") + scale_fill_manual(name="Subject group", values=hue_pal()(2), labels=c("Case", "Control"))
 ```
 
-```{r pcoa}
-# d = vegdist(fakeCounts+4, method="bray")
-# d2 = vegdist(fakeCounts+4, method="aitchison")
-# BC_pcoa = pcoa(d)
-# A_pcoa = pcoa(d2)
-# 
-# a=BC_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% left_join(design) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(phenotype))) + geom_point()
-# b=BC_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point()
-# ggarrange(a,b)
-# 
-# c=A_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% left_join(design) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(phenotype))) + geom_point() + scale_color_manual(name="Subject group", labels=c("Case", "Control"), values=c("#F8766D", "#00B0F6")) + xlab("PCoA Component 1 (95%)") + ylab("PCoA Component 2 (5%)") + theme(text=element_text(size=14))
-# c = c + theme(legend.position="none", text=element_text(size=14))
-# d=A_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% ggplot(aes(x=Axis.1,y=Axis.2,col=as.factor(timepoint))) + geom_point() + xlab("PCoA Component 1 (95%)") + ylab("PCoA Component 2 (5%)") + theme(legend.position="top")
-# d = d + theme(legend.position="none", text=element_text(size=14))
-# ggarrange(c,d, nrow=2)
-# 
-# A_pcoa$vectors %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% select(subject,timepoint,Axis.1,Axis.2) %>% left_join(design) %>% ggplot(aes(x=Axis.1, y=Axis.2, shape=as.factor(phenotype), col=as.factor(timepoint))) + geom_point(size=3) + xlab("PCoA Component 1 (95%)") + ylab("PCoA Component 2 (5%)") + scale_color_discrete(name="Time point") + scale_shape_manual(name="Phenotype", labels=c("Case","Control"), values=16:17) + theme(text=element_text(size=14))
+```{r temp}
+library(parafac4microbiome)
+
+temp = fakeCounts %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I))
+
+cube = array(NA, dim=c(I,J,K))
+
+for(k in 1:K){
+  cube[,,k] = temp %>% filter(timepoint==k) %>% arrange(subject) %>% select(-subject,-timepoint) %>% as.matrix()
+}
+
+dataset = list()
+dataset$data = cube
+dataset$mode1 = cbind(1:100, c(rep("case",50), rep("control",50))) %>% as_tibble()
+dataset$mode2 = c("Actinobacteria", "Bacteroidetes", "Proteobacteria") %>% as_tibble()
+dataset$mode3 = 1:10
+
+temp = rbind(cube[,,1], cube[,,2], cube[,,3], cube[,,4], cube[,,5], cube[,,6], cube[,,7], cube[,,8], cube[,,9], cube[,,10]) %>% as_tibble() %>% mutate(subject=rep(1:I,K),timepoint=rep(1:K,each=I))
+
+temp %>% pivot_longer(-c(subject,timepoint)) %>% ggplot(aes(x=timepoint,y=value,col=as.factor(subject))) + facet_wrap(vars(name)) + geom_line()
 ```
 
-```{r pca}
-counts_clr = t(apply(fakeCounts+6, 1, function(x){log(x / compositions::geometricmean(x))}))
-colnames(counts_clr) = c("Actinobacteria", "Bacteroidetes", "Proteobacteria")
-subject=rep(1:I,each=K)
-timepoint=rep(1:K,I)
+```{r temp with clr}
+cube_clr = multiwayCLR(cube)
 
-pca_model = prcomp(counts_clr, center=TRUE, scale=TRUE)
-#autoplot(pca_model, loadings=TRUE, colour=timepoint, loadings.label=TRUE, loadings.label.size=3) + ylim(-0.65, 0.15)
+cube = cube_clr
 
-# Plot using time colours
-scores = pca_model$x %>% as_tibble() %>% mutate(subject=rep(1:I,each=K),timepoint=rep(1:K,I)) %>% left_join(design)
-loadings = data.frame(varnames=rownames(pca_model$rotation), pca_model$rotation)
+temp = rbind(cube[,,1], cube[,,2], cube[,,3], cube[,,4], cube[,,5], cube[,,6], cube[,,7], cube[,,8], cube[,,9], cube[,,10]) %>% as_tibble() %>% mutate(subject=rep(1:I,K),timepoint=rep(1:K,each=I))
 
-## Find scalar for loadings to be comparable in size to scores
-# mult = min(
-#     (max(scores$PC2) - min(scores$PC2)/(max(datapc[,"PC2"])-min(datapc[,"PC2"]))),
-#     (max(scores$PC1) - min(scores$PC1)/(max(datapc[,"PC1"])-min(datapc[,"PC1"])))
-#     )
-mult=9
-loadings = transform(loadings, v1 = .7 * mult * (get("PC1")),v2 = .7 * mult * (get("PC2")))
+temp %>% pivot_longer(-c(subject,timepoint)) %>% ggplot(aes(x=timepoint,y=value,col=as.factor(subject))) + facet_wrap(vars(name)) + geom_line()
+```
 
-## Layer 1: scores
-plot = scores %>% ggplot(aes(x=PC1,y=PC2, col=as.factor(timepoint), group=as.factor(subject))) +
-  geom_line(col="darkgrey") +
-  geom_point() +
-  geom_hline(yintercept=0, size=.2) +
-  geom_vline(xintercept=0, size=.2)
+```{r temp with cnt}
+cube_cnt = multiwayCenter(cube_clr, mode=1)
 
-## Layer 2: loadings
-plot = plot +
-  geom_text(data=loadings, aes(x=v1, y=v2, label=varnames), size = 5, vjust=1, hjust=1, color="red", inherit.aes=FALSE) +
-  geom_segment(data=loadings, aes(x=0, y=0, xend=v1, yend=v2), arrow=arrow(length=unit(0.2,"cm")), alpha=0.75, color="red", inherit.aes=FALSE) +
-  scale_colour_grey(start=0.8, end=0) +
-  xlab("PC1 (66.44%)") +
-  ylab("PC2 (33.56%)") +
-  theme(legend.position="NA", text=element_text(size=12))
+cube = cube_cnt
 
-# For legend
-plot + guides(color=guide_legend(title="Time point")) + theme(legend.position="right")
+temp = rbind(cube[,,1], cube[,,2], cube[,,3], cube[,,4], cube[,,5], cube[,,6], cube[,,7], cube[,,8], cube[,,9], cube[,,10]) %>% as_tibble() %>% mutate(subject=rep(1:I,K),timepoint=rep(1:K,each=I))
+
+temp %>% pivot_longer(-c(subject,timepoint)) %>% ggplot(aes(x=timepoint,y=value,col=as.factor(subject))) + facet_wrap(vars(name)) + geom_line()
+```
+
+```{r temp normal scaling}
+cube_scl = multiwayScale(cube_cnt, mode=2)
+
+cube = cube_scl
+
+temp = rbind(cube[,,1], cube[,,2], cube[,,3], cube[,,4], cube[,,5], cube[,,6], cube[,,7], cube[,,8], cube[,,9], cube[,,10]) %>% as_tibble() %>% mutate(subject=rep(1:I,K),timepoint=rep(1:K,each=I))
+
+temp %>% pivot_longer(-c(subject,timepoint)) %>% ggplot(aes(x=timepoint,y=value,col=as.factor(subject))) + facet_wrap(vars(name)) + geom_line()
+```
+
+```{r temp pareto scaling}
+multiwayScale2 = function(cube, mode=2){
+  I = dim(cube)[1]
+  J = dim(cube)[2]
+  K = dim(cube)[3]
+
+  cube_scl = array(0L, dim=c(I,J,K))
+
+  if(mode == 1){      # Scale within subject mode
+    for(i in 1:I){
+        cube_scl[i,,] = cube[i,,] / sqrt(stats::sd(cube[i,,], na.rm=TRUE))
+    }
+  }
+  else if(mode == 2){ # Scale within feature mode
+    for(j in 1:J){
+      cube_scl[,j,] = cube[,j,] / sqrt(stats::sd(cube[,j,], na.rm=TRUE))
+    }
+  }
+  else if(mode == 3){ # Scale within "time" mode
+    for(k in 1:K){
+        cube_scl[,,k] = cube[,,k] / sqrt(stats::sd(cube[,,k], na.rm=TRUE))
+    }
+  }
+
+  return(cube_scl)
+}
+
+cube_scl2 = multiwayScale2(cube_cnt, mode=2)
+
+cube = cube_scl2
+
+temp = rbind(cube[,,1], cube[,,2], cube[,,3], cube[,,4], cube[,,5], cube[,,6], cube[,,7], cube[,,8], cube[,,9], cube[,,10]) %>% as_tibble() %>% mutate(subject=rep(1:I,K),timepoint=rep(1:K,each=I))
+
+temp %>% pivot_longer(-c(subject,timepoint)) %>% ggplot(aes(x=timepoint,y=value,col=as.factor(subject))) + facet_wrap(vars(name)) + geom_line()
+```
+
+```{r temp small extra std}
+multiwayScale3 = function(cube, mode=2){
+  I = dim(cube)[1]
+  J = dim(cube)[2]
+  K = dim(cube)[3]
+
+  cube_scl = array(0L, dim=c(I,J,K))
+
+  if(mode == 1){      # Scale within subject mode
+    for(i in 1:I){
+        cube_scl[i,,] = cube[i,,] / (stats::sd(cube[i,,], na.rm=TRUE) + 1e-3)
+    }
+  }
+  else if(mode == 2){ # Scale within feature mode
+    for(j in 1:J){
+      cube_scl[,j,] = cube[,j,] / (stats::sd(cube[,j,], na.rm=TRUE) + 1e-3)
+    }
+  }
+  else if(mode == 3){ # Scale within "time" mode
+    for(k in 1:K){
+        cube_scl[,,k] = cube[,,k] / (stats::sd(cube[,,k], na.rm=TRUE) + 1e-3)
+    }
+  }
+
+  return(cube_scl)
+}
+
+cube_scl3 = multiwayScale3(cube_cnt, mode=2)
+
+cube = cube_scl3
+
+temp = rbind(cube[,,1], cube[,,2], cube[,,3], cube[,,4], cube[,,5], cube[,,6], cube[,,7], cube[,,8], cube[,,9], cube[,,10]) %>% as_tibble() %>% mutate(subject=rep(1:I,K),timepoint=rep(1:K,each=I))
+
+temp %>% pivot_longer(-c(subject,timepoint)) %>% ggplot(aes(x=timepoint,y=value,col=as.factor(subject))) + facet_wrap(vars(name)) + geom_line()
 ```

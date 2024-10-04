@@ -134,4 +134,175 @@ matrix(uncorrectedP, nrow=2)
 
 matrix(correctedP, nrow=2)
 ```
+```{r cluster the features}
+library(cluster)
+library(factoextra)
 
+# Lazy solution to getting a long matrix
+I = dim(processedShao$data)[1]
+J = dim(processedShao$data)[2]
+K = dim(processedShao$data)[3]
+X_long = processedShao$data[,,1]
+for(k in 2:K){
+  X_long = rbind(X_long, processedShao$data[,,k])
+}
+X_wide = matrix(processedShao$data, I, J*K)
+Xhat = reinflateBlock(finalModel)
+
+Xhat_filtered = Xhat
+
+I = dim(Xhat_filtered)[1]
+J = dim(Xhat_filtered)[2]
+K = dim(Xhat_filtered)[3]
+
+# Lazy solution to getting a long matrix
+Xhat_filtered_long = Xhat_filtered[,,1]
+for(k in 2:K){
+  Xhat_filtered_long = rbind(Xhat_filtered_long, Xhat_filtered[,,k])
+}
+
+# Clustering diagnostics
+a = fviz_nbclust(t(Xhat_filtered_long), pam, method="wss")
+b = fviz_nbclust(t(Xhat_filtered_long), pam, method="silhouette")
+c = fviz_nbclust(t(Xhat_filtered_long), pam, method="gap_stat")
+ggarrange(a,b,c, nrow=3)
+```
+
+```{r cluster the features two}
+library(ggrepel)
+# Cluster
+set.seed(1)
+numClusters = 4
+clusteringResult = pam(t(Xhat_filtered_long), numClusters, nstart=50)
+result = processedShao$mode2 %>% as_tibble() %>% mutate(cluster=clusteringResult$clustering)
+
+clusteredFeatures = cbind(transformPARAFACloadings(finalModel, 2), processedShao$mode2) %>% as_tibble() %>% left_join(result) %>% mutate(temp = str_split_fixed(mOTU, " ", 2)[,2]) %>% mutate(name = str_split_fixed(temp, " \\[", 2)[,1])
+#clusteredFeatures[is.na(clusteredFeatures$cluster),"name"] = NA
+#clusteredFeatures[is.na(clusteredFeatures$genus),"name"] = NA
+#clusteredFeatures[is.na(clusteredFeatures$mOTU),"name"] = NA
+clusteredFeatures %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(cluster))) + geom_point() + xlab("Feature mode, component 1 (transformed)") + ylab("Feature mode, component 2 (transformed)") + scale_color_manual(name = "Cluster", labels=c("1","2","3","4"), values=c("#F8766D","#00BA38","#619CFF","#B385FF")) + theme(legend.position="left",text=element_text(size=14))
+
+clusteredFeatures %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(cluster), label=name)) + geom_point(size=3) + xlab("Feature mode, component 1 (transformed)") + ylab("Feature mode, component 2 (transformed)") + scale_color_manual(name = "Cluster", labels=c("1","2","3","4"), values=c("#F8766D","#00BA38","#619CFF","#B385FF")) + theme(legend.position="none",text=element_text(size=14)) + geom_text_repel()
+```
+
+```{r relabs plots of clusters}
+# Import sample info
+sampleMeta = read.csv("../parafac4microbiome/data-raw/Shao2019_sampleMetadata.csv", skip=2) %>% as_tibble()
+mapping = read.csv("../parafac4microbiome/data-raw/Shao2019_mapping.tsv", sep="\t") %>% as_tibble()
+sampleInfo = sampleMeta %>% left_join(mapping, by=c("Accession"="secondary_sample_accession"))
+
+# Import and fix taxonomy
+taxa = read.csv("../parafac4microbiome/data-raw/Shao2019_speciesMetadata.csv") %>% as_tibble()
+taxa = taxa %>%
+  mutate(OTU = paste0("OTU", 1:nrow(.)), consensus_taxonomy = X.consensus_taxonomy) %>%
+  select(OTU, consensus_taxonomy)
+
+# Fix taxonomic levels
+taxonomy = read.csv("../parafac4microbiome/data-raw/db_mOTU_taxonomy_ref-mOTUs.tsv", sep="\t") %>% as_tibble()
+taxonomy$kingdom = str_split_fixed(taxonomy$kingdom, " ", 2)[,2]
+taxonomy$phylum = str_split_fixed(taxonomy$phylum, " ", 2)[,2]
+taxonomy$class = str_split_fixed(taxonomy$class, " ", 2)[,2]
+taxonomy$order = str_split_fixed(taxonomy$order, " ", 2)[,2]
+taxonomy$family = str_split_fixed(taxonomy$family, " ", 2)[,2]
+taxonomy$genus = str_split_fixed(taxonomy$genus, " ", 2)[,2]
+
+fixedIDs = str_sub(taxa$consensus_taxonomy, -20, -2)
+fixedIDs = gsub("\\[", "", fixedIDs)
+
+taxa = taxa %>%
+  mutate(fixedIDs = fixedIDs) %>%
+  left_join(taxonomy, by=c("fixedIDs"="ref.mOTU_v2_ID")) %>%
+  select(-consensus_taxonomy,-fixedIDs,-specI_cluster)
+
+# Import count data and process
+df = read.csv("../parafac4microbiome/data-raw/Shao2019_counts.csv") %>% as_tibble()
+colnames(df) = str_split_fixed(colnames(df),"_",3)[,1]
+
+sampleInfo = sampleInfo %>% filter(run_accession %in% colnames(df))
+
+df = df %>% select(all_of(sampleInfo$run_accession)) %>% t() %>% as_tibble()
+colnames(df) = taxa$OTU
+
+# Keep only timepoint 4, 7, 21 and Infancy samples
+sampleMask = (sampleInfo$Time_point %in% c(4,7,21,"Infancy")) & (sampleInfo$Infancy_sampling_age_months != "Mother")
+sampleMask = sampleMask & !is.na(sampleMask) # correct for NA results in mask
+sampleInfo_filtered = sampleInfo[sampleMask,]
+df_filtered = df[sampleMask,]
+
+# Remove all-zero features for disk space reasons
+sparsity = colSums(df_filtered==0) / nrow(df_filtered)
+featureMask = sparsity < 1
+df_filtered = df_filtered[,featureMask]
+taxa = taxa[featureMask,]
+
+# Transition to cluster code
+countData = df_filtered
+countData.numeric = countData
+relAbs = sweep(countData.numeric, 1, rowSums(countData.numeric), FUN="/")
+timepoints = c(4,7,21,"Infancy")
+
+library(scales)
+clusterStr = c("Cluster 1", "Cluster 2", "Cluster 3", "Cluster 4")
+relAbs %>% as_tibble() %>% mutate(subject=sampleInfo_filtered$Individual,timepoint=sampleInfo_filtered$Time_point,Delivery_mode=sampleInfo_filtered$Delivery_mode) %>% pivot_longer(-c(subject,timepoint,Delivery_mode)) %>% left_join(clusteredFeatures, by=c("name"="OTU")) %>% filter(cluster != "NA") %>% select(subject,timepoint,cluster,name,value) %>% group_by(subject,timepoint,cluster) %>% summarize(s=sum(value)) %>% left_join(sampleInfo_filtered %>% select(Individual,Delivery_mode) %>% unique(), by=c("subject"="Individual")) %>% ungroup() %>% group_by(Delivery_mode,timepoint,cluster) %>% summarize(m=mean(s,na.rm=TRUE),v=plotrix::std.error(s,na.rm=TRUE)) %>% ungroup() %>% mutate(cluster_str = clusterStr[cluster]) %>% mutate(timepoint=factor(timepoint,levels=c("4","7","21","Infancy"))) %>% ggplot(aes(x=as.factor(timepoint),y=m,col=as.factor(Delivery_mode),group=as.factor(Delivery_mode))) + facet_wrap(vars(cluster_str),nrow=2,ncol=2) + geom_line() + geom_errorbar(aes(ymax=m+v,ymin=m-v,width=.2)) + geom_point() + theme(legend.position="bottom",text=element_text(size=14)) + xlab("Time point [days]") + ylab("Sum of ASVs per group (mean +/- SEM)") + scale_color_manual(name="Delivery mode",labels=c("Vaginal", "C-section"),values=hue_pal()(4)[1:2]) + ylim(0,1)
+
+relAbs %>% as_tibble() %>% mutate(subject=sampleInfo_filtered$Individual,timepoint=sampleInfo_filtered$Time_point,Feeding_mode=sampleInfo_filtered$Feeding_method) %>% pivot_longer(-c(subject,timepoint,Feeding_mode)) %>% left_join(clusteredFeatures, by=c("name"="OTU")) %>% filter(cluster != "NA") %>% select(subject,timepoint,cluster,name,value) %>% group_by(subject,timepoint,cluster) %>% summarize(s=sum(value)) %>% left_join(sampleInfo_filtered %>% select(Individual,Feeding_method) %>% unique(), by=c("subject"="Individual")) %>% ungroup() %>% group_by(Feeding_method,timepoint,cluster) %>% summarize(m=mean(s,na.rm=TRUE),v=plotrix::std.error(s,na.rm=TRUE)) %>% ungroup() %>% mutate(cluster_str = clusterStr[cluster]) %>% filter(Feeding_method %in% c("BF", "NoBF")) %>% mutate(timepoint=factor(timepoint,levels=c("4","7","21","Infancy"))) %>%  ggplot(aes(x=as.factor(timepoint),y=m,col=as.factor(Feeding_method),group=as.factor(Feeding_method))) + facet_wrap(vars(cluster_str),nrow=2,ncol=2) + geom_line() + geom_errorbar(aes(ymax=m+v,ymin=m-v,width=.2)) + geom_point() + theme(legend.position="bottom",text=element_text(size=14)) + xlab("Time point [days]") + ylab("Sum of ASVs per group (mean +/- SEM)") + scale_color_manual(name="Feeding mode",labels=c("Breast-fed", "Formula-fed"),values=hue_pal()(4)[3:4]) + ylim(0,1)
+```
+
+```{r permutation testing of the relabs}
+permTest_Birth = function(relAbs, sampleMeta, clustering, visit, clusterNum, numPermutations=999){
+  prep = relAbs %>%
+    as_tibble() %>%
+    mutate(subject = sampleMeta$Individual, timepoint = sampleMeta$Time_point) %>%
+    pivot_longer(-c(timepoint,subject)) %>% 
+    left_join(clustering %>% select(OTU,cluster), by=c("name"="OTU")) %>%
+    filter(cluster == clusterNum, timepoint==visit) %>%
+    select(-cluster) %>% 
+    group_by(subject) %>%
+    summarize(s=sum(value)) %>%
+    left_join(sampleMeta %>% select(Individual, Delivery_mode) %>% unique(), by=c("subject"="Individual")) %>%
+    filter(Delivery_mode %in% c("Caesarean", "Vaginal"))
+  
+  dfA = prep %>% filter(Delivery_mode == "Vaginal") %>% select(s) %>% pull()
+  dfB = prep %>% filter(Delivery_mode == "Caesarean") %>% select(s) %>% pull()
+  realResult = mean(dfA) - mean(dfB)
+  
+  permutedResults = 1:numPermutations
+  for(i in 1:numPermutations){
+    dfA = prep %>% mutate(Delivery_mode = sample(Delivery_mode)) %>% filter(Delivery_mode == "Vaginal") %>% select(s) %>% pull()
+    dfB = prep %>% mutate(Delivery_mode = sample(Delivery_mode)) %>% filter(Delivery_mode == "Caesarean") %>% select(s) %>% pull()
+    permutedResults[i] = mean(dfA) - mean(dfB)
+  }
+  
+  Zscore = abs(realResult - mean(permutedResults)) / sd(permutedResults)
+  
+  if (realResult < 0){
+    pvalue = sum(permutedResults < realResult) / numPermutations
+  }
+  else{
+    pvalue = sum(permutedResults > realResult) / numPermutations
+  }
+  
+  if(pvalue == 0){
+    pvalue = 1/numPermutations
+  }
+  
+  return(list(realResult, permutedResults, mean(permutedResults), median(permutedResults), sd(permutedResults), Zscore, pvalue))
+}
+
+uncorrectedP = rep(NA, 16)
+iterator = 1
+timepoints = c("4", "7", "21", "Infancy")
+
+for(visit in 1:4){
+  for(cluster in 1:4){
+    tp = timepoints[visit]
+    uncorrectedP[iterator] = permTest_Birth(relAbs, sampleInfo_filtered, clusteredFeatures, tp, cluster, 100)[[7]]
+    iterator = iterator + 1
+  }
+}
+
+correctedP = p.adjust(uncorrectedP, "BH")
+
+matrix(uncorrectedP, nrow=4, ncol=4)
+matrix(correctedP, nrow=4, ncol=4)
+```

@@ -33,45 +33,39 @@ processedFujita = processDataCube(Fujita2023, sparsityThreshold=0.99, centerMode
 
 ```{r investigate num comp}
 numRepetitions = 50
-assessment = assessNumComponents(processedFujita$data, minNumComponents=1, maxNumComponents=5, numRepetitions=numRepetitions, ctol=1e-6, maxit=500, numCores=12)
+qualityAssessment = assessModelQuality(processedFujita$data, minNumComponents=1, maxNumComponents=5, numRepetitions=numRepetitions, ctol=1e-6, maxit=500, numCores=12)
 ```
 
 ```{r check the plots}
-assessment$plots$overview
+qualityAssessment$plots$overview
 # 4 or 3 components seems okay
 ```
 
 ```{r model stability}
 numFolds = 8
 
-stability3 = modelStabilityCheck(processedFujita, numComponents=3, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes,numCores=12)
-stability4 = modelStabilityCheck(processedFujita, numComponents=4, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, continuousModes=continuousModes,numCores=12)
+stabilityAssessment = assessModelStability(processedFujita, minNumComponents=1, maxNumComponents=5, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes,numCores=12)
 
-stability3$plot
-stability4$plot
-# So we choose 3 components
+stabilityAssessment$modelPlots[[1]]
+stabilityAssessment$modelPlots[[2]]
+stabilityAssessment$modelPlots[[3]]
+stabilityAssessment$modelPlots[[4]]
+stabilityAssessment$modelPlots[[5]]
 ```
 
 ```{r select the model}
 numComponents = 3
-modelChoice = which(assessment$metrics$varExp[,numComponents] == max(assessment$metrics$varExp[,numComponents]))
-finalModel = assessment$models[[numComponents]][[modelChoice]]
-
-# Make the important loadings positive for easier interpretation
-finalModel = resign(finalModel, mode="C", absorb="A")
-finalModel = resign(finalModel, mode="B", absorb="A")
+modelChoice = which(qualityAssessment$metrics$varExp[,numComponents] == max(qualityAssessment$metrics$varExp[,numComponents]))
+finalModel = qualityAssessment$models[[numComponents]][[modelChoice]]
 ```
 
 ```{r plot the model}
 # Plot 2B
-varExp = calculateVarExp(finalModel, processedFujita$data)
+varExp = calculateVarExp(finalModel$Fac, processedFujita$data)
 
-plotlist = plotPARAFACmodel(finalModel, processedFujita, 3, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+plotlist = plotPARAFACmodel(finalModel$Fac, processedFujita, 3, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
                  continuousModes = c(FALSE,FALSE,TRUE),
                  overallTitle = "")
-plotPARAFACmodel(finalModel, processedFujita, 3, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
-                 continuousModes = c(FALSE,FALSE,TRUE),
-                 overallTitle = " ")
 
 newPlotlist = list()
 for(i in 1:9){
@@ -100,4 +94,44 @@ relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
 relAbs %>% mutate(replicate=countMatrix$replicate, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(replicate,timepoint)) %>% filter(name %in% processedFujita$mode2$ID) %>% left_join(Fujita2023$mode2, by=c("name"="ID")) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(Genus))) + facet_wrap(vars(replicate),nrow=8,strip.position="right") + geom_bar(stat="identity",col="black") + theme(legend.position="None", axis.text.x = element_text(angle=90, vjust=0.5,hjust=1)) + xlab("Time point") + ylab("Relative abundance")
 
 relAbs %>% mutate(replicate=countMatrix$replicate, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(replicate,timepoint)) %>% filter(name %in% processedFujita$mode2$ID) %>% left_join(Fujita2023$mode2, by=c("name"="ID")) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(Genus))) + facet_wrap(vars(replicate),nrow=8,strip.position="right") + geom_bar(stat="identity",col="black") + theme(axis.text.x = element_text(angle=90, vjust=0.5,hjust=1)) + xlab("Time point") + ylab("Relative abundance")
+```
+
+```{r PCA}
+library(vegan)
+library(ape)
+library(ggbiplot)
+library(rTensor)
+library(scales)
+
+
+unfoldedCounts = k_unfold(as.tensor(Fujita2023$data), 2)@data %>% t()
+replicates = rep(1:8, 110)
+timepoints = rep(1:110, each=8)
+plotlist = list()
+
+pseudocount = 1
+counts_clr = t(apply(unfoldedCounts+pseudocount, 1, function(x){log(x / compositions::geometricmean(x))}))
+colnames(counts_clr) = Fujita2023$mode2$Genus
+counts_meta = cbind(counts_clr, replicates, timepoints) %>% as.data.frame()
+counts_meta$r = as.factor(counts_meta$r)
+
+pca_model = prcomp(counts_clr, center=TRUE, scale=TRUE)
+plotlist[[1]] = autoplot(pca_model, data=counts_meta, colour="r", loadings=TRUE, loadings.label=TRUE, loadings.label.size=3) + ggtitle("All")
+
+for(i in 1:5){
+  start = max(1,20*(i-1)*8+1)
+  finish = (20*i*8)
+  df = counts_clr[start:finish,]
+  r = replicates[start:finish]
+  t = timepoints[start:finish]
+  minT = min(t)
+  maxT = max(t)
+  df_meta = cbind(df,r) %>% as.data.frame()
+  df_meta$r = as.factor(df_meta$r)
+
+  model = prcomp(df, center=TRUE, scale=TRUE)
+  plotlist[[i+1]] = autoplot(model, data=df_meta, colour="r", loadings=TRUE, loadings.label=TRUE, loadings.label.size=3) + ggtitle(paste0(minT,"-",maxT))
+}
+
+ggarrange(plotlist=plotlist, common.legend=TRUE)
 ```
