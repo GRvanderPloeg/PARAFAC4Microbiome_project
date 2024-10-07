@@ -72,7 +72,20 @@ for(i in 1:9){
   newPlotlist[[i]] = plotlist[[i]] + theme(text=element_text(size=14))
 }
 
-ggarrange(plotlist=newPlotlist, ncol=3, nrow=4)
+ggarrange(plotlist=newPlotlist, ncol=3, nrow=3)
+
+# Flip modes
+Fac = finalModel$Fac
+Fac[[2]][,1] = -1 * Fac[[2]][,1]
+Fac[[3]][,1] = -1 * Fac[[3]][,1]
+Fac[[1]][,2] = -1 * Fac[[1]][,2]
+Fac[[2]][,2] = -1 * Fac[[2]][,2]
+Fac[[1]][,3] = -1 * Fac[[1]][,3]
+Fac[[3]][,3] = -1 * Fac[[3]][,3]
+
+plotPARAFACmodel(Fac, processedFujita, 3, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+                 continuousModes = c(FALSE,FALSE,TRUE),
+                 overallTitle = " ")
 ```
 
 

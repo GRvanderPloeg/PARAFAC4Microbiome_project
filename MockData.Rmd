@@ -167,8 +167,8 @@ g=t1 %>% as_tibble() %>% mutate(index=1:nrow(.),subject=1:nrow(.)) %>% left_join
 j=t2 %>% as_tibble() %>% mutate(index=1:nrow(.),subject=1:nrow(.)) %>% left_join(design) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity",width=1.05) + theme(legend.position="none",text=element_text(size=14)) + ylab("Component 2 loading") + xlab("Subject index")
 h=p1 %>% as_tibble() %>% mutate(index=1:nrow(.),phylum=c("Actinobacteria", "Bacteroidetes", "Proteobacteria")) %>% ggplot(aes(x=index,y=value,fill=as.factor(phylum))) + geom_bar(stat="identity") + ylab("") + xlab("") + scale_fill_manual(name="Phylum", labels=c("Actinobacteria", "Bacteroidetes", "Proteobacteria"), values=c("#A3A500", "#E76BF3", "#00BF7D"))+ theme(legend.position="none",text=element_text(size=14))
 k=p2 %>% as_tibble() %>% mutate(index=1:nrow(.),phylum=c("Actinobacteria", "Bacteroidetes", "Proteobacteria")) %>% ggplot(aes(x=index,y=value,fill=as.factor(phylum))) + geom_bar(stat="identity") + ylab("") + xlab("Feature index") + scale_fill_manual(name="Phylum", labels=c("Actinobacteria", "Bacteroidetes", "Proteobacteria"), values=c("#A3A500", "#E76BF3", "#00BF7D"))+ theme(legend.position="none",text=element_text(size=14))
-i=k1 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=as.factor(index),y=value)) + geom_bar(stat="identity") + theme(legend.position="none",text=element_text(size=14))+ ylab("") + xlab("")
-l=(k2-0.5) %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=as.factor(index),y=value)) + geom_bar(stat="identity") + theme(legend.position="none",text=element_text(size=14))+ ylab("") + xlab("Time point")
+i=k1 %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=as.factor(index),y=value,fill=as.factor(index))) + geom_bar(stat="identity") + theme(legend.position="none",text=element_text(size=14))+ ylab("") + xlab("") + scale_fill_grey(start=0.8, end=0)
+l=(k2-0.5) %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=as.factor(index),y=value,fill=as.factor(index))) + geom_bar(stat="identity") + theme(legend.position="none",text=element_text(size=14))+ ylab("") + xlab("Time point") + scale_fill_grey(start=0.8, end=0)
 ggarrange(g,h,i,j,k,l)
 
 t1 %>% as_tibble() %>% mutate(index=1:nrow(.),subject=1:nrow(.)) %>% left_join(design) %>% ggplot(aes(x=index,y=value,fill=as.factor(phenotype))) + geom_bar(stat="identity") + theme(legend.position="right",text=element_text(size=14)) + ylab("Component 1") + xlab("") + scale_fill_manual(name="Subject group", values=hue_pal()(2), labels=c("Case", "Control"))
@@ -223,7 +223,7 @@ plot = scores %>% ggplot(aes(x=PC1,y=PC2, col=as.factor(timepoint), group=as.fac
 
 ## Layer 2: loadings
 plot = plot +
-  geom_text(data=loadings, aes(x=v1, y=v2, label=varnames), size = 5, vjust=1, hjust=1, color="red", inherit.aes=FALSE) +
+  #geom_text(data=loadings, aes(x=v1, y=v2, label=varnames), size = 5, vjust=1, hjust=1, color="red", inherit.aes=FALSE) +
   geom_segment(data=loadings, aes(x=0, y=0, xend=v1, yend=v2), arrow=arrow(length=unit(0.2,"cm")), alpha=0.75, color="red", inherit.aes=FALSE) +
   scale_colour_grey(start=0.8, end=0) +
   xlab("PC1 (66.44%)") +
