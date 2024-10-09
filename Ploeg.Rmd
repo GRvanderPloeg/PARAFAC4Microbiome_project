@@ -363,3 +363,72 @@ correctedP = p.adjust(uncorrectedP, "BH")
 matrix(uncorrectedP, nrow=2, ncol=7)
 matrix(correctedP, nrow=2, ncol=7)
 ```
+
+```{r sensitivity analysis}
+set.seed(123)
+
+X = rTensor::as.tensor(vanderPloeg2024$data)
+sparsity = calculateSparsity(vanderPloeg2024, considerGroups = TRUE, groupVariable = "RFgroup") * 100
+sparsityMask = colSums(sparsity <= 50) >= 1
+
+###### Pseudocount between 0 and 1
+imp = matrix(runif(prod(X@modes)), X@modes)
+imp[X@data != 0] = 0
+imp = rTensor::k_fold(imp, m=1, X@modes)
+
+newX = X + imp
+newX_clr = log(newX@data)
+
+newX_filtered = newX_clr[,sparsityMask,]
+newX_cnt = multiwayCenter(newX_filtered, 1)
+newX_cnt_scl = multiwayScale(newX_cnt, 2)
+
+qualityAssessment2 = assessModelQuality(newX_cnt_scl, minNumComponents=1, maxNumComponents=3, numRepetitions=numRepetitions, ctol=1e-6, maxit=500, numCores=12)
+
+###### Pseudocount 0.5
+
+unfoldedX = t(rTensor::k_unfold(X, 2)@data) # unfold to J x IK matrix, then transpose
+unfoldedX_clr = t(apply(unfoldedX+0.5, 1, function(x){log(x / compositions::geometricmean(x))}))
+X_clr = rTensor::k_fold(t(unfoldedX_clr), m=2, X@modes)
+
+newX_filtered = X_clr[,sparsityMask,]
+newX_cnt = multiwayCenter(newX_filtered, 1)
+newX_cnt_scl = multiwayScale(newX_cnt, 2)
+
+qualityAssessment3 = assessModelQuality(newX_cnt_scl, minNumComponents=1, maxNumComponents=3, numRepetitions=numRepetitions, ctol=1e-6, maxit=500, numCores=12)
+
+###### Pseudocount 0.1
+
+unfoldedX = t(rTensor::k_unfold(X, 2)@data) # unfold to J x IK matrix, then transpose
+unfoldedX_clr = t(apply(unfoldedX+0.1, 1, function(x){log(x / compositions::geometricmean(x))}))
+X_clr = rTensor::k_fold(t(unfoldedX_clr), m=2, X@modes)
+
+newX_filtered = X_clr[,sparsityMask,]
+newX_cnt = multiwayCenter(newX_filtered, 1)
+newX_cnt_scl = multiwayScale(newX_cnt, 2)
+
+qualityAssessment4 = assessModelQuality(newX_cnt_scl, minNumComponents=1, maxNumComponents=3, numRepetitions=numRepetitions, ctol=1e-6, maxit=500, numCores=12)
+```
+
+```{r make sensitivity plot}
+# Create fake input dataset with NA instead of zeroes to compare
+Xna = newX_cnt_scl
+Xna[vanderPloeg2024$data == 0] = NA
+
+# Recalculate varExp
+varExp1 = 1:50
+varExp2 = 1:50
+varExp3 = 1:50
+varExp4 = 1:50
+for(i in 1:50){
+  varExp1[i] = calculateVarExp(qualityAssessment$models[[2]][[i]]$Fac, Xna) * 100
+  varExp2[i] = calculateVarExp(qualityAssessment2$models[[2]][[i]]$Fac, Xna) * 100
+  varExp3[i] = calculateVarExp(qualityAssessment3$models[[2]][[i]]$Fac, Xna) * 100
+  varExp4[i] = calculateVarExp(qualityAssessment4$models[[2]][[i]]$Fac, Xna) * 100
+}
+
+my_comparisons = list(c("varExp1", 'varExp2'), c("varExp1", "varExp3"), c("varExp1", "varExp4"))
+df = cbind(varExp1, varExp3, varExp4, varExp2) %>% as_tibble() %>% pivot_longer(everything()) %>% mutate(name = factor(name, levels=c("varExp1", "varExp3", "varExp4", "varExp2")))
+
+df %>% ggplot(aes(x=as.factor(name),y=value)) + geom_boxplot() + stat_compare_means(comparisons=my_comparisons, label="p.signif") + scale_x_discrete(name="Pseudocount approach", labels=c("Pseudocount 1", "Pseudocount 0.5", "Pseudocount 0.1", "Pseudocount uniform (0,1)")) + ylab("Variation explained (%)")
+```
