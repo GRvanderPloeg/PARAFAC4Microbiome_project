@@ -28,7 +28,7 @@ continuousModes = c(FALSE,FALSE,TRUE)
 ```
 
 ```{r check sparsity}
-sparsity = calculateSparsity(vanderPloeg2024, considerGroups = TRUE, groupVariable = "RFgroup") * 100
+sparsity = calculateSparsity(vanderPloeg2024$upper_jaw_lingual, considerGroups = TRUE, groupVariable = "RFgroup") * 100
 
 a=sparsity[1,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(col="black", bins=25) + geom_vline(xintercept=50, col="red", linewidth=1) + xlab("Sparsity (%)") + ylab("Count") + ggtitle("Low responders")
 b=sparsity[2,] %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(col="black", bins=25) + geom_vline(xintercept=50, col="red", linewidth=1) +xlab("Sparsity (%)") + ylab("Count") + ggtitle("Mid responders")
@@ -37,7 +37,7 @@ ggarrange(a,b,c, nrow=1)
 ```
 
 ```{r process the data}
-processedPloeg = processDataCube(vanderPloeg2024, sparsityThreshold=0.5, considerGroups=TRUE, groupVariable="RFgroup", centerMode=1, scaleMode=2)
+processedPloeg = processDataCube(vanderPloeg2024$upper_jaw_lingual, sparsityThreshold=0.5, considerGroups=TRUE, groupVariable="RFgroup", centerMode=1, scaleMode=2)
 ```
 
 ```{r investigate num comp}
