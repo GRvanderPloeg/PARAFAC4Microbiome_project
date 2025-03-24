@@ -45,6 +45,14 @@ numRepetitions = 50
 qualityAssessment = assessModelQuality(processedPloeg$data, minNumComponents=1, maxNumComponents=5, numRepetitions=numRepetitions, ctol=1e-6, maxit=500, numCores=12)
 ```
 
+```{r check why models converged}
+unlist(lapply(qualityAssessment$models[[1]], function(x){length(x$fs)}))
+unlist(lapply(qualityAssessment$models[[2]], function(x){length(x$fs)}))
+unlist(lapply(qualityAssessment$models[[3]], function(x){length(x$fs)}))
+unlist(lapply(qualityAssessment$models[[4]], function(x){length(x$fs)}))
+unlist(lapply(qualityAssessment$models[[5]], function(x){length(x$fs)}))
+```
+
 ```{r check the plots}
 qualityAssessment$plots$overview
 qualityAssessment$plots$TCC[[3]]
@@ -63,9 +71,13 @@ stabilityAssessment$modelPlots[[5]]
 ```
 
 ```{r select the model}
-numComponents = 2
-modelChoice = which(qualityAssessment$metrics$varExp[,numComponents] == max(qualityAssessment$metrics$varExp[,numComponents]))
-finalModel = qualityAssessment$models[[numComponents]][[modelChoice]]
+# numComponents = 2
+# modelChoice = which(qualityAssessment$metrics$varExp[,numComponents] == max(qualityAssessment$metrics$varExp[,numComponents]))
+# finalModel = qualityAssessment$models[[numComponents]][[modelChoice]]
+# 
+# saveRDS(finalModel, "./Ploeg2024_model.RDS")
+
+finalModel = readRDS("./Ploeg2024_model.RDS")
 ```
 
 ```{r plot the model manually}
@@ -82,20 +94,18 @@ days = c(-14, 0, 2, 5, 9, 14, 21)
 Fac = finalModel$Fac
 Fac[[1]][,1] = -1 * Fac[[1]][,1]
 Fac[[3]][,1] = -1 * Fac[[3]][,1]
-Fac[[1]][,2] = -1 * Fac[[1]][,1]
-Fac[[2]][,2] = -1 * Fac[[2]][,2]
 
-a = cbind(Fac[[1]], processedPloeg$mode1) %>% as_tibble() %>% arrange(RFgroup, subject) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`1`,fill=as.factor(RFgroup))) + geom_bar(stat="identity") + scale_fill_manual(name="Response group", values=RF_cols, labels=c("Low", "Mid", "High")) + xlab("") + ylab("Component 1") + theme(legend.position="none", text=element_text(size=12))
+a = cbind(Fac[[1]], processedPloeg$mode1) %>% as_tibble() %>% ggplot(aes(x=as.factor(RFgroup),y=`1`,fill=as.factor(RFgroup))) + geom_violin() + geom_jitter(width=0.075,height=0) + stat_compare_means(comparisons=list(c("0","2")),label="p.signif") + scale_fill_manual(name="Response group", values=RF_cols, labels=c("Low", "Mid", "High")) + xlab("Response group") + ylab("Component 1") + theme(legend.position="none", text=element_text(size=12)) + ylim(-25,25)
 
-b = cbind(Fac[[2]], processedPloeg$mode2) %>% as_tibble() %>% arrange(Phylum, Class, Order, Family, Genus, Species, asv) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`1`,fill=as.factor(Phylum))) + geom_bar(stat="identity") + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteriota", "Bacteroidota", "Firmicutes", "Fusobacteriota", "Proteobacteria")) + xlab("") + ylab("") + theme(legend.position="none", text=element_text(size=12)) 
+b = cbind(Fac[[2]], processedPloeg$mode2) %>% as_tibble() %>% arrange(Phylum, Class, Order, Family, Genus, Species, asv) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`1`,fill=as.factor(Phylum))) + geom_bar(stat="identity") + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteriota", "Bacteroidota", "Firmicutes", "Fusobacteriota", "Proteobacteria")) + xlab("Feature index") + ylab("Component 1") + theme(legend.position="none", text=element_text(size=12)) 
 
-c = cbind(Fac[[3]], days) %>% as_tibble() %>% ggplot(aes(x=days,y=V1)) + annotate("rect", xmin=0,xmax=14,ymin=-Inf,ymax=Inf, fill="red", alpha=0.5) + geom_line() + geom_point() + xlab("") + ylab("")
+c = cbind(Fac[[3]], days) %>% as_tibble() %>% ggplot(aes(x=days,y=V1)) + annotate("rect", xmin=0,xmax=14,ymin=-Inf,ymax=Inf, fill="red", alpha=0.5) + geom_line() + geom_point() + xlab("Time point [days]") + ylab("Component 1")
 
-d = cbind(Fac[[1]], processedPloeg$mode1) %>% as_tibble() %>% arrange(RFgroup, subject) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`2`,fill=as.factor(RFgroup))) + geom_bar(stat="identity") + scale_fill_manual(name="Response group", values=RF_cols, labels=c("Low", "Mid", "High")) + xlab("Subject index") + ylab("Component 2") + theme(legend.position="none", text=element_text(size=12))
+d = cbind(Fac[[1]], processedPloeg$mode1) %>% as_tibble() %>% ggplot(aes(x=as.factor(RFgroup),y=`2`,fill=as.factor(RFgroup))) + geom_violin() + geom_jitter(width=0.075,height=0) + stat_compare_means(comparisons=list(c("0","2")),label="p.signif") + scale_fill_manual(name="Response group", values=RF_cols, labels=c("Low", "Mid", "High")) + xlab("Response group") + ylab("Component 2") + theme(legend.position="none", text=element_text(size=12)) + ylim(-20,20)
 
-e = cbind(Fac[[2]], processedPloeg$mode2) %>% as_tibble() %>% arrange(Phylum, Class, Order, Family, Genus, Species, asv) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`2`,fill=as.factor(Phylum))) + geom_bar(stat="identity") + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteriota", "Bacteroidota", "Firmicutes", "Fusobacteriota", "Proteobacteria")) + xlab("Feature index") + ylab("") + theme(legend.position="none", text=element_text(size=12)) 
+e = cbind(Fac[[2]], processedPloeg$mode2) %>% as_tibble() %>% arrange(Phylum, Class, Order, Family, Genus, Species, asv) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`2`,fill=as.factor(Phylum))) + geom_bar(stat="identity") + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteriota", "Bacteroidota", "Firmicutes", "Fusobacteriota", "Proteobacteria")) + xlab("Feature index") + ylab("Component 2") + theme(legend.position="none", text=element_text(size=12)) 
 
-f = cbind(Fac[[3]], days) %>% as_tibble() %>% ggplot(aes(x=days,y=V2)) + annotate("rect", xmin=0,xmax=14,ymin=-Inf,ymax=Inf, fill="red", alpha=0.5) + geom_line() + geom_point() + xlab("Time point [days]") + ylab("")
+f = cbind(Fac[[3]], days) %>% as_tibble() %>% ggplot(aes(x=days,y=V2)) + annotate("rect", xmin=0,xmax=14,ymin=-Inf,ymax=Inf, fill="red", alpha=0.5) + geom_line() + geom_point() + xlab("Time point [days]") + ylab("Component 2")
 
 ggarrange(a,b,c,d,e,f)
 ```
@@ -161,7 +171,7 @@ uncorrectedP[2,3] = cor.test(temp$V2, temp$Area_delta_R30, method="pearson")$p.v
 partA = normalSubjectLoadings %>% left_join(age_gender) %>% select(1,2,gender) %>% filter(gender==1)
 partB = normalSubjectLoadings %>% left_join(age_gender) %>% select(1,2,gender) %>% filter(gender==2)
 
-uncorrectedP[1,4] = t.test(partA$`1`, partB$`1`)$p.value # Not what I would do nowadays, but this is what is in the TIFN paper
+uncorrectedP[1,4] = t.test(partA$`1`, partB$`1`)$p.value
 uncorrectedP[2,4] = t.test(partA$`2`, partB$`2`)$p.value
 
 # Age
@@ -273,10 +283,14 @@ c = fviz_nbclust(t(Xhat_filtered_long), pam, method="gap_stat")
 ggarrange(a,b,c, nrow=3)
 
 # Cluster
-set.seed(1)
+set.seed(123)
 numClusters = 2
 clusteringResult = pam(t(Xhat_filtered_long), numClusters, nstart=50)
 result = processedPloeg$mode2[featureMask,] %>% as_tibble() %>% mutate(cluster=clusteringResult$clustering)
+
+# Change cluster numbers around to stay consistent
+result$cluster = result$cluster - 1
+result[result$cluster == 0, "cluster"] = 2
 
 clusteredFeatures = cbind(transformPARAFACloadings(Fac, 2), processedPloeg$mode2) %>% as_tibble() %>% left_join(result) %>% mutate(name = paste0(Genus, " ", Species))
 clusteredFeatures[is.na(clusteredFeatures$cluster),"name"] = NA
@@ -284,7 +298,7 @@ clusteredFeatures[is.na(clusteredFeatures$Genus),"name"] = NA
 clusteredFeatures[is.na(clusteredFeatures$Species),"name"] = NA
 clusteredFeatures %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(cluster))) + geom_point() + xlab("Feature mode, component 1 (transformed)") + ylab("Feature mode, component 2 (transformed)") + scale_color_manual(name = "Cluster", labels=c("1","2","3","Not clustered"), values=c("#F8766D","#00BA38","#619CFF")) + theme(legend.position="bottom",text=element_text(size=14))
 
-clusteredFeatures %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(cluster), label=name)) + geom_point(size=3) + xlab("Feature mode, component 1 (transformed)") + ylab("Feature mode, component 2 (transformed)") + scale_color_manual(name = "Cluster", labels=c("1","2","Not clustered"), values=hue_pal()(2)) + theme(legend.position="bottom",text=element_text(size=14)) + geom_text_repel()
+clusteredFeatures %>% ggplot(aes(x=`1`,y=`2`,col=as.factor(cluster), label=name)) + geom_point(size=3) + xlab("Feature mode, component 1 (transformed)") + ylab("Feature mode, component 2 (transformed)") + scale_color_manual(name = "Cluster", labels=c("1","2","Not clustered"), values=hue_pal()(2)) + geom_text_repel(size=6)  + theme(legend.position="none",text=element_text(size=14))
 ```
 
 ```{r relabs plots of clusters}
@@ -367,8 +381,8 @@ matrix(correctedP, nrow=2, ncol=7)
 ```{r sensitivity analysis}
 set.seed(123)
 
-X = rTensor::as.tensor(vanderPloeg2024$data)
-sparsity = calculateSparsity(vanderPloeg2024, considerGroups = TRUE, groupVariable = "RFgroup") * 100
+X = rTensor::as.tensor(vanderPloeg2024$upper_jaw_lingual$data)
+sparsity = calculateSparsity(vanderPloeg2024$upper_jaw_lingual, considerGroups = TRUE, groupVariable = "RFgroup") * 100
 sparsityMask = colSums(sparsity <= 50) >= 1
 
 ###### Pseudocount between 0 and 1

@@ -36,31 +36,44 @@ processedShao = processDataCube(Shao2019, sparsityThreshold=0.9, considerGroups=
 ```
 
 ```{r investigate num comp}
-numRepetitions = 50
-qualityAssessment = assessModelQuality(processedShao$data, minNumComponents=1, maxNumComponents=5, numRepetitions=numRepetitions, ctol=1e-8, maxit=500, numCores=12)
+# numRepetitions = 50
+# qualityAssessment = assessModelQuality(processedShao$data, minNumComponents=1, maxNumComponents=5, numRepetitions=numRepetitions, ctol=1e-8, maxit=500, numCores=12)
 ```
 
 ```{r check the plots}
-qualityAssessment$plots$overview
+# qualityAssessment$plots$overview
+```
+```{r check why models converged}
+# unlist(lapply(qualityAssessment$models[[1]], function(x){length(x$fs)}))
+# unlist(lapply(qualityAssessment$models[[2]], function(x){length(x$fs)}))
+# unlist(lapply(qualityAssessment$models[[3]], function(x){length(x$fs)}))
+# unlist(lapply(qualityAssessment$models[[4]], function(x){length(x$fs)}))
+# unlist(lapply(qualityAssessment$models[[5]], function(x){length(x$fs)}))
 ```
 
 ```{r model stability}
-numFolds = 50
-
-stabilityAssessment = assessModelStability(processedShao, minNumComponents=1, maxNumComponents=3, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, numCores=4)
-
-stabilityAssessment$modelPlots[[1]]
-stabilityAssessment$modelPlots[[2]]
-stabilityAssessment$modelPlots[[3]]
+# numFolds = 50
+# 
+# stabilityAssessment = assessModelStability(processedShao, minNumComponents=1, maxNumComponents=3, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes, numCores=4)
+# 
+# stabilityAssessment$modelPlots[[1]]
+# stabilityAssessment$modelPlots[[2]]
+# stabilityAssessment$modelPlots[[3]]
 ```
 
 ```{r select the model}
-numComponents = 3
-modelChoice = which(qualityAssessment$metrics$varExp[,numComponents] == max(qualityAssessment$metrics$varExp[,numComponents]))
-finalModel = qualityAssessment$models[[numComponents]][[modelChoice]]
+# numComponents = 3
+# modelChoice = which(qualityAssessment$metrics$varExp[,numComponents] == max(qualityAssessment$metrics$varExp[,numComponents]))
+# finalModel = qualityAssessment$models[[numComponents]][[modelChoice]]
+# 
+# saveRDS(finalModel, "./Shao2019_model.RDS")
+
+finalModel = readRDS("./Shao2019_model.RDS")
 ```
 
 ```{r plot the model}
+sampleMeta = read.csv("./Data/Shao_sampleMetadata.csv", skip=2) %>% as_tibble()
+
 # Plot 3B - make by hand to deal with colour feedback
 
 # Set up colours
@@ -70,58 +83,59 @@ phylum_cols = colours[-c(1:2)]
 
 # Flip Fac where needed
 Fac = finalModel$Fac
-Fac[[3]][,2] = -1 * Fac[[3]][,2]
+Fac[[2]][,2] = -1 * Fac[[2]][,2]
 Fac[[1]][,2] = -1 * Fac[[1]][,2]
-Fac[[3]][,3] = -1 * Fac[[3]][,3]
-Fac[[1]][,3] = -1 * Fac[[1]][,3]
 
 days = c("4", "7", "21", "Infancy")
 
-a = cbind(Fac[[1]], processedShao$mode1) %>% as_tibble() %>% arrange(Delivery_mode, Individual) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`1`,fill=as.factor(Delivery_mode))) + geom_bar(stat="identity") + scale_fill_manual(name="Birth mode", values=bm_cols, labels=c("Caesarean", "Vaginal")) + xlab("") + ylab("Component 1") + theme(legend.position="none",text=element_text(size=12))
+a = cbind(Fac[[1]], processedShao$mode1) %>% as_tibble() %>% left_join(sampleMeta) %>% select(-Time_point,-Accession,-WGS_reads_raw,-WGS_reads_trimmed) %>% filter(Infancy_sampling_age_months != "Mother") %>% unique() %>% filter(!is.na(Abx_mother_labour_IAP)) %>% mutate(Abx = (Abx_mother_labour_IAP == "Yes")) %>% ggplot(aes(x=as.factor(Abx),y=`1`)) + geom_violin() + geom_jitter(width=0.02,height=0,size=0.75) + stat_compare_means(comparisons=list(c("TRUE","FALSE")),label="p.signif") + xlab("Antibiotics given to mother\n during labour") + ylab("Component 1") + scale_x_discrete(label=c("No", "Yes")) + theme(legend.position="none", text=element_text(size=12)) + ylim(-6,6)
 
-b = cbind(Fac[[2]], processedShao$mode2) %>% as_tibble() %>% arrange(phylum, class, order, family, genus, mOTU, OTU) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`1`,fill=as.factor(phylum))) + geom_bar(stat="identity") + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria", "Unclassified")) + xlab("") + ylab("") + theme(legend.position="none", text=element_text(size=12)) 
+b = cbind(Fac[[2]], processedShao$mode2) %>% as_tibble() %>% arrange(phylum, class, order, family, genus, mOTU, OTU) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`1`,fill=as.factor(phylum))) + geom_bar(stat="identity") + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria", "Unclassified")) + xlab("Feature index") + ylab("Component 1") + theme(legend.position="none", text=element_text(size=12)) 
 
-c = Fac[[3]] %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V1)) + geom_line() + geom_point() + xlab("") + ylab("") + scale_x_discrete(name="",limits=days)
+c = Fac[[3]] %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V1)) + geom_line() + geom_point() + xlab("Time point [days]") + ylab("Component 1") + scale_x_discrete(name="Time point [days]",limits=days)
 
-d = cbind(Fac[[1]], processedShao$mode1) %>% as_tibble() %>% arrange(Delivery_mode, Individual) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`2`,fill=as.factor(Delivery_mode))) + geom_bar(stat="identity") + scale_fill_manual(name="Birth mode", values=bm_cols, labels=c("Caesarean", "Vaginal")) + xlab("") + ylab("Component 2") + theme(legend.position="none",text=element_text(size=12))
+d = cbind(Fac[[1]], processedShao$mode1) %>% as_tibble() %>% left_join(sampleMeta) %>% select(-Time_point,-Accession,-WGS_reads_raw,-WGS_reads_trimmed) %>% filter(Infancy_sampling_age_months != "Mother") %>% unique() %>% filter(!is.na(Feeding_method)) %>% ggplot(aes(x=as.factor(Feeding_method),y=`2`)) + geom_violin() + geom_jitter(width=0.02,height=0,size=0.75) + stat_compare_means(comparisons=list(c("BF","NoBF")),label="p.signif") + xlab("Feeding method") + ylab("Component 2") + scale_x_discrete(label=c("Exclusively\n breastfed", "Mixed", "Not\n breastfed")) + theme(legend.position="none", text=element_text(size=12)) + ylim(-10,15)
 
-e = cbind(Fac[[2]], processedShao$mode2) %>% as_tibble() %>% arrange(phylum, class, order, family, genus, mOTU, OTU) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`2`,fill=as.factor(phylum))) + geom_bar(stat="identity") + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria", "Unclassified")) + xlab("") + ylab("") + theme(legend.position="none", text=element_text(size=12)) 
+e = cbind(Fac[[2]], processedShao$mode2) %>% as_tibble() %>% arrange(phylum, class, order, family, genus, mOTU, OTU) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`2`,fill=as.factor(phylum))) + geom_bar(stat="identity") + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria", "Unclassified")) + xlab("Feature index") + ylab("Component 2") + theme(legend.position="none", text=element_text(size=12)) 
 
-f = Fac[[3]] %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V2)) + geom_line() + geom_point() + xlab("") + ylab("") + scale_x_discrete(name="",limits=days)
+f = Fac[[3]] %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V2)) + geom_line() + geom_point() + xlab("Time point [days]") + ylab("Component 2") + scale_x_discrete(name="Time point [days]",limits=days)
 
-g = cbind(Fac[[1]], processedShao$mode1) %>% as_tibble() %>% arrange(Delivery_mode, Individual) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`3`,fill=as.factor(Delivery_mode))) + geom_bar(stat="identity") + scale_fill_manual(name="Birth mode", values=bm_cols, labels=c("Caesarean", "Vaginal")) + xlab("Subject index") + ylab("Component 3") + theme(legend.position="none",text=element_text(size=12))
+g = cbind(Fac[[1]], processedShao$mode1) %>% as_tibble() %>% left_join(sampleMeta) %>% select(-Time_point,-Accession,-WGS_reads_raw,-WGS_reads_trimmed) %>% filter(Infancy_sampling_age_months != "Mother") %>% unique() %>% ggplot(aes(x=as.factor(Delivery_mode),y=`3`)) + geom_violin() + geom_jitter(width=0.02,height=0,size=0.75) + stat_compare_means(comparisons=list(c("Caesarean","Vaginal")),label="p.signif") + xlab("Delivery mode") + ylab("Component 3") + theme(legend.position="none", text=element_text(size=12)) + ylim(-10,10)
 
-h = cbind(Fac[[2]], processedShao$mode2) %>% as_tibble() %>% arrange(phylum, class, order, family, genus, mOTU, OTU) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`3`,fill=as.factor(phylum))) + geom_bar(stat="identity") + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria", "Unclassified")) + xlab("Feature index") + ylab("") + theme(legend.position="none", text=element_text(size=12)) 
+h = cbind(Fac[[2]], processedShao$mode2) %>% as_tibble() %>% arrange(phylum, class, order, family, genus, mOTU, OTU) %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=`3`,fill=as.factor(phylum))) + geom_bar(stat="identity") + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria", "Unclassified")) + xlab("Feature index") + ylab("Component 3") + theme(legend.position="none", text=element_text(size=12)) 
 
-i = Fac[[3]] %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V3)) + geom_line() + geom_point() + xlab("") + ylab("") + scale_x_discrete(name="Time point [days]",limits=days)
+i = Fac[[3]] %>% as_tibble() %>% mutate(index=1:nrow(.)) %>% ggplot(aes(x=index,y=V3)) + geom_line() + geom_point() + xlab("Time point [days]") + ylab("Component 3") + scale_x_discrete(name="Time point [days]",limits=days)
 
 ggarrange(a,b,c,d,e,f,g,h,i)
 ```
 
 ```{r loading plot}
-temp1 = cbind(Fac[[2]], processedShao$mode2) %>% as_tibble() %>% arrange(`1`) %>% mutate(index=1:nrow(.)) %>% filter(abs(`1`) > 0.01)
+threshold=0.00
+# threshold = 0.070
+
+temp1 = cbind(Fac[[2]], processedShao$mode2) %>% as_tibble() %>% arrange(`1`) %>% mutate(index=1:nrow(.)) %>% filter(abs(`1`) > threshold)
 name = str_split_fixed(temp1$mOTU, " \\[", 2)[,1]
 name = str_split_fixed(name, " ", 3)[,2:3] %>% as_tibble()
 name[name$V1 == "","V1"] = "Unclassified"
 name = paste0(name$V1, " ", name$V2)
 
-a = temp1 %>% ggplot(aes(x=`1`,y=as.factor(index),fill=as.factor(phylum))) + geom_bar(stat="identity") + ylab("Microbiota") + xlab("Component 1") + scale_y_discrete(labels=name) + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria", "Unclassified")) + ylab("") + theme(legend.position="none", text=element_text(size=12))
+a = temp1 %>% ggplot(aes(x=`1`,y=as.factor(index),fill=as.factor(phylum))) + geom_bar(stat="identity") + ylab("Microbiota") + xlab("Component 1") + scale_y_discrete(labels=name) + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria", "Unclassified")) + ylab("") + theme(legend.position="none", text=element_text(size=16))
 
-temp2 = cbind(Fac[[2]], processedShao$mode2) %>% as_tibble() %>% arrange(`2`) %>% mutate(index=1:nrow(.)) %>% filter(abs(`2`) > 0.01)
+temp2 = cbind(Fac[[2]], processedShao$mode2) %>% as_tibble() %>% arrange(`2`) %>% mutate(index=1:nrow(.)) %>% filter(abs(`2`) > threshold)
 name = str_split_fixed(temp2$mOTU, " \\[", 2)[,1]
 name = str_split_fixed(name, " ", 3)[,2:3] %>% as_tibble()
 name[name$V1 == "","V1"] = "Unclassified"
 name = paste0(name$V1, " ", name$V2)
 
-b = temp2 %>% ggplot(aes(x=`2`,y=as.factor(index),fill=as.factor(phylum))) + geom_bar(stat="identity") + ylab("Microbiota") + xlab("Component 2") + scale_y_discrete(labels=name) + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria", "Unclassified"))+ ylab("") + theme(legend.position="none", text=element_text(size=12)) 
+b = temp2 %>% ggplot(aes(x=`2`,y=as.factor(index),fill=as.factor(phylum))) + geom_bar(stat="identity") + ylab("Microbiota") + xlab("Component 2") + scale_y_discrete(labels=name) + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria", "Unclassified"))+ ylab("") + theme(legend.position="none", text=element_text(size=16)) 
 
-temp3 = cbind(Fac[[2]], processedShao$mode2) %>% as_tibble() %>% arrange(`3`) %>% mutate(index=1:nrow(.)) %>% filter(abs(`3`) > 0.01)
+temp3 = cbind(Fac[[2]], processedShao$mode2) %>% as_tibble() %>% arrange(`3`) %>% mutate(index=1:nrow(.)) %>% filter(abs(`3`) > threshold)
 name = str_split_fixed(temp3$mOTU, " \\[", 2)[,1]
 name = str_split_fixed(name, " ", 3)[,2:3] %>% as_tibble()
 name[name$V1 == "","V1"] = "Unclassified"
 name = paste0(name$V1, " ", name$V2)
 
-c = temp3 %>% ggplot(aes(x=`3`,y=as.factor(index),fill=as.factor(phylum))) + geom_bar(stat="identity") + ylab("Microbiota") + xlab("Component 3") + scale_y_discrete(labels=name) + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria", "Unclassified")) + ylab("") + theme(legend.position="none", text=element_text(size=12)) 
+c = temp3 %>% ggplot(aes(x=`3`,y=as.factor(index),fill=as.factor(phylum))) + geom_bar(stat="identity") + ylab("Microbiota") + xlab("Component 3") + scale_y_discrete(labels=name) + scale_fill_manual(name="Phylum", values=phylum_cols, labels=c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria", "Unclassified")) + ylab("") + theme(legend.position="none", text=element_text(size=16)) 
 ggarrange(a,b,c, nrow=1)
 ```
 

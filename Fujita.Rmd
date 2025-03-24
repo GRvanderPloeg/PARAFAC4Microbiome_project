@@ -9,6 +9,8 @@ library(parafac4microbiome)
 library(tidyverse)
 library(multiway)
 library(ggpubr)
+library(Polychrome)
+library(colorspace)
 set.seed(123)
 ```
 
@@ -31,65 +33,7 @@ sparsity %>% as_tibble() %>% ggplot(aes(x=value)) + geom_histogram(bins=100, col
 processedFujita = processDataCube(Fujita2023, sparsityThreshold=0.99, centerMode=1, scaleMode=2)
 ```
 
-```{r investigate num comp}
-numRepetitions = 50
-qualityAssessment = assessModelQuality(processedFujita$data, minNumComponents=1, maxNumComponents=5, numRepetitions=numRepetitions, ctol=1e-6, maxit=500, numCores=12)
-```
-
-```{r check the plots}
-qualityAssessment$plots$overview
-# 4 or 3 components seems okay
-```
-
-```{r model stability}
-numFolds = 8
-
-stabilityAssessment = assessModelStability(processedFujita, minNumComponents=1, maxNumComponents=5, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes,numCores=12)
-
-stabilityAssessment$modelPlots[[1]]
-stabilityAssessment$modelPlots[[2]]
-stabilityAssessment$modelPlots[[3]]
-stabilityAssessment$modelPlots[[4]]
-stabilityAssessment$modelPlots[[5]]
-```
-
-```{r select the model}
-numComponents = 3
-modelChoice = which(qualityAssessment$metrics$varExp[,numComponents] == max(qualityAssessment$metrics$varExp[,numComponents]))
-finalModel = qualityAssessment$models[[numComponents]][[modelChoice]]
-```
-
-```{r plot the model}
-# Plot 2B
-varExp = calculateVarExp(finalModel$Fac, processedFujita$data)
-
-plotlist = plotPARAFACmodel(finalModel$Fac, processedFujita, 3, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
-                 continuousModes = c(FALSE,FALSE,TRUE),
-                 overallTitle = "")
-
-newPlotlist = list()
-for(i in 1:9){
-  newPlotlist[[i]] = plotlist[[i]] + theme(text=element_text(size=14))
-}
-
-ggarrange(plotlist=newPlotlist, ncol=3, nrow=3)
-
-# Flip modes
-Fac = finalModel$Fac
-Fac[[2]][,1] = -1 * Fac[[2]][,1]
-Fac[[3]][,1] = -1 * Fac[[3]][,1]
-Fac[[1]][,2] = -1 * Fac[[1]][,2]
-Fac[[2]][,2] = -1 * Fac[[2]][,2]
-Fac[[1]][,3] = -1 * Fac[[1]][,3]
-Fac[[3]][,3] = -1 * Fac[[3]][,3]
-
-plotPARAFACmodel(Fac, processedFujita, 3, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
-                 continuousModes = c(FALSE,FALSE,TRUE),
-                 overallTitle = " ")
-```
-
-
-```{r create relabs plot}
+```{r plot relabs}
 I = dim(Fujita2023$data)[1]
 J = dim(Fujita2023$data)[2]
 K = dim(Fujita2023$data)[3]
@@ -103,8 +47,101 @@ countMatrix.numeric = countMatrix %>% select(-replicate,-timepoint)
 totalSums = rowSums(countMatrix.numeric)
 relAbs = sweep(countMatrix.numeric, 1, totalSums, FUN="/") %>% as_tibble()
 
-# Plot 2A
-relAbs %>% mutate(replicate=countMatrix$replicate, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(replicate,timepoint)) %>% filter(name %in% processedFujita$mode2$ID) %>% left_join(Fujita2023$mode2, by=c("name"="ID")) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(Genus))) + facet_wrap(vars(replicate),nrow=8,strip.position="right") + geom_bar(stat="identity",col="black") + theme(legend.position="None", axis.text.x = element_text(angle=90, vjust=0.5,hjust=1)) + xlab("Time point") + ylab("Relative abundance")
+# Clean up
+relAbs_long = relAbs %>% 
+  mutate(replicate=countMatrix$replicate, timepoint=countMatrix$timepoint) %>%
+  pivot_longer(-c(replicate, timepoint), names_to = "ID", values_to = "value") %>%
+  left_join(Fujita2023$mode2 %>% select(ID, Genus), by = "ID")
 
-relAbs %>% mutate(replicate=countMatrix$replicate, timepoint=countMatrix$timepoint) %>% pivot_longer(-c(replicate,timepoint)) %>% filter(name %in% processedFujita$mode2$ID) %>% left_join(Fujita2023$mode2, by=c("name"="ID")) %>% ggplot(aes(x=as.factor(timepoint),y=value,fill=as.factor(Genus))) + facet_wrap(vars(replicate),nrow=8,strip.position="right") + geom_bar(stat="identity",col="black") + theme(axis.text.x = element_text(angle=90, vjust=0.5,hjust=1)) + xlab("Time point") + ylab("Relative abundance")
+# Define colours per genus
+all_genera = unique(relAbs_long$Genus)
+base_colors = createPalette(length(all_genera), seedcolors = c("#4477AA", "#CC6677"))
+pastel_colors = lighten(desaturate(base_colors, amount = 0.4), amount = 0.3)
+genus_colors = setNames(pastel_colors, all_genera)
+
+# Plot 2A
+relAbs_long %>% ggplot(aes(x=as.factor(timepoint),y=value, fill=Genus)) +
+  facet_wrap(vars(replicate),nrow=8, strip.position="right") +
+  geom_bar(stat="identity",col="black",linewidth=0.1) +
+  scale_fill_manual(values=genus_colors) +
+  theme(legend.position="none", axis.text.x=element_text(angle=90,vjust=0.5,hjust=1)) +
+  xlab("Time point") +
+  ylab("Relative abundance")
+```
+
+```{r investigate num comp}
+# numRepetitions = 50
+# qualityAssessment = assessModelQuality(processedFujita$data, minNumComponents=1, maxNumComponents=5, numRepetitions=numRepetitions, ctol=1e-6, maxit=500, numCores=12)
+```
+
+```{r check the plots}
+# qualityAssessment$plots$overview
+# 4 or 3 components seems okay
+```
+
+```{r model stability}
+# numFolds = 8
+# 
+# stabilityAssessment = assessModelStability(processedFujita, minNumComponents=1, maxNumComponents=5, numFolds=numFolds, colourCols=colourCols, legendTitles=legendTitles, xLabels=xLabels, legendColNums=legendColNums, arrangeModes=arrangeModes,numCores=12)
+# 
+# stabilityAssessment$modelPlots[[1]]
+# stabilityAssessment$modelPlots[[2]]
+# stabilityAssessment$modelPlots[[3]]
+# stabilityAssessment$modelPlots[[4]]
+# stabilityAssessment$modelPlots[[5]]
+```
+
+```{r check why models converged}
+# unlist(lapply(qualityAssessment$models[[1]], function(x){length(x$fs)}))
+# unlist(lapply(qualityAssessment$models[[2]], function(x){length(x$fs)}))
+# unlist(lapply(qualityAssessment$models[[3]], function(x){length(x$fs)}))
+# unlist(lapply(qualityAssessment$models[[4]], function(x){length(x$fs)}))
+# unlist(lapply(qualityAssessment$models[[5]], function(x){length(x$fs)}))
+```
+
+```{r select the model}
+# numComponents = 3
+# modelChoice = which(qualityAssessment$metrics$varExp[,numComponents] == max(qualityAssessment$metrics$varExp[,numComponents]))
+# finalModel = qualityAssessment$models[[numComponents]][[modelChoice]]
+# 
+# saveRDS(finalModel, "./Fujita2023_model.RDS")
+
+finalModel = readRDS("./Fujita2023_model.RDS")
+```
+
+```{r plot the model}
+# Flip modes
+Fac = finalModel$Fac
+Fac[[2]][,1] = -1 * Fac[[2]][,1]
+Fac[[3]][,1] = -1 * Fac[[3]][,1]
+Fac[[1]][,2] = -1 * Fac[[1]][,2]
+Fac[[3]][,2] = -1 * Fac[[3]][,2]
+# Fac[[1]][,3] = -1 * Fac[[1]][,3]
+# Fac[[2]][,3] = -1 * Fac[[2]][,3]
+
+# Plot 2B
+varExp = calculateVarExp(finalModel$Fac, processedFujita$data)
+
+plotlist = plotPARAFACmodel(Fac, processedFujita, 3, colourCols, legendTitles, xLabels, legendColNums, arrangeModes,
+                 continuousModes = c(FALSE,FALSE,TRUE),
+                 overallTitle = "")
+
+newPlotlist = list()
+# Subject mode
+newPlotlist[[1]] = plotlist[[1]] + geom_bar(stat="identity",col="black") + theme(text=element_text(size=14))
+newPlotlist[[4]] = plotlist[[4]] + geom_bar(stat="identity",col="black") + theme(text=element_text(size=14))
+newPlotlist[[7]] = plotlist[[7]] + geom_bar(stat="identity",col="black") + theme(text=element_text(size=14))
+
+# Feature mode
+# df = cbind(Fac[[2]], processedFujita$mode2) %>% as_tibble() %>% arrange(Genus) mutate(index=1:nrow(.))
+newPlotlist[[2]] = plotlist[[2]] + geom_bar(stat="identity",col="black") + scale_fill_manual(values=genus_colors) + theme(text=element_text(size=14))
+newPlotlist[[5]] = plotlist[[5]] + scale_fill_manual(values=genus_colors) + geom_bar(stat="identity",col="black") + theme(text=element_text(size=14))
+newPlotlist[[8]] = plotlist[[8]] + scale_fill_manual(values=genus_colors) + geom_bar(stat="identity",col="black") + theme(text=element_text(size=14))
+
+# Time mode
+newPlotlist[[3]] = plotlist[[3]] + theme(text=element_text(size=14))
+newPlotlist[[6]] = plotlist[[6]] + theme(text=element_text(size=14))
+newPlotlist[[9]] = plotlist[[9]] + theme(text=element_text(size=14))
+
+ggarrange(plotlist=newPlotlist, ncol=3, nrow=3)
 ```
